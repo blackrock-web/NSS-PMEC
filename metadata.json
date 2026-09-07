@@ -1,0 +1,6 @@
+{
+  "name": "NSS College Unit Portal",
+  "description": "Official institutional website for the National Service Scheme (NSS) college unit featuring community service initiatives, special camps, events, achievements, reports, and volunteer enrollment.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
