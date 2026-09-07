@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   Lock,
@@ -18,10 +18,14 @@ import {
   GraduationCap,
   Phone,
   Hash,
+  QrCode,
+  Sparkles,
+  Info,
 } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth, Pending2FAState } from '../../context/AuthContext';
 import { NssLogo } from '../common/NssLogo';
 import { api } from '../../lib/api';
+import type { Role } from '../../types';
 
 export type AuthViewMode = 'login' | 'register' | 'forgot-password' | 'admin-2fa';
 
@@ -40,26 +44,33 @@ export const UnifiedAuthModal: React.FC<UnifiedAuthModalProps> = ({
   onSuccess,
   onNavigateToAdmin,
 }) => {
-  const { login, register, quickDemoLogin, isLoginOpen, closeLogin } = useAuth();
+  const { login, verify2FA, register, demoSwitch, isLoginOpen, closeLogin } = useAuth();
   const [mode, setMode] = useState<AuthViewMode>(initialMode);
 
   // Form Fields - Login
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [requestAdminAccess, setRequestAdminAccess] = useState(false);
 
-  // Form Fields - Admin 2FA Verification
-  const [adminPasscode, setAdminPasscode] = useState('');
-  const [showPasscode, setShowPasscode] = useState(false);
+  // Form Fields - 2FA Verification
+  const [pending2FA, setPending2FA] = useState<Pending2FAState | null>(null);
+  const [totpCode, setTotpCode] = useState('');
+  const [masterAuthKey, setMasterAuthKey] = useState('');
+  const [showMasterKey, setShowMasterKey] = useState(false);
+  const [totpSetupInfo, setTotpSetupInfo] = useState<{
+    secret: string;
+    otpauthUrl: string;
+    demoBypassCodes: string[];
+    masterKeyHint: string;
+  } | null>(null);
 
-  // Form Fields - Registration
+  // Form Fields - Registration (Normal Volunteer Cadet)
   const [regName, setRegName] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regPassword, setRegPassword] = useState('');
   const [regConfirmPassword, setRegConfirmPassword] = useState('');
   const [regDepartment, setRegDepartment] = useState('');
-  const [regAcademicYear, setRegAcademicYear] = useState('');
+  const [regAcademicYear, setRegAcademicYear] = useState('2025–26');
   const [regPhone, setRegPhone] = useState('');
   const [regRollNumber, setRegRollNumber] = useState('');
 
@@ -78,9 +89,22 @@ export const UnifiedAuthModal: React.FC<UnifiedAuthModalProps> = ({
 
   const isOpen = propsIsOpen !== undefined ? propsIsOpen : isLoginOpen;
 
+  useEffect(() => {
+    if (mode === 'admin-2fa') {
+      api.auth.getTotpSetup(pending2FA?.email).then((res) => {
+        if (res.success && res.data) {
+          setTotpSetupInfo(res.data);
+        }
+      });
+    }
+  }, [mode, pending2FA?.email]);
+
   const handleClose = () => {
     setError(null);
     setInfoMessage(null);
+    setPending2FA(null);
+    setTotpCode('');
+    setMasterAuthKey('');
     if (propsOnClose) {
       propsOnClose();
     } else {
@@ -88,10 +112,11 @@ export const UnifiedAuthModal: React.FC<UnifiedAuthModalProps> = ({
     }
   };
 
-  const handleAuthComplete = (wasAdminFlow = false) => {
+  const handleAuthComplete = (role?: Role) => {
     handleClose();
     if (onSuccess) onSuccess();
-    if (wasAdminFlow && onNavigateToAdmin) {
+    const isAdminRole = role && role !== 'user' && role !== 'member' && role !== 'public';
+    if (isAdminRole && onNavigateToAdmin) {
       onNavigateToAdmin();
     }
   };
@@ -99,7 +124,7 @@ export const UnifiedAuthModal: React.FC<UnifiedAuthModalProps> = ({
   if (!isOpen) return null;
 
   // ----------------------------------------------------
-  // Handler: Login (Step 1 or Unified)
+  // Handler: Unified Login
   // ----------------------------------------------------
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -110,92 +135,86 @@ export const UnifiedAuthModal: React.FC<UnifiedAuthModalProps> = ({
     const res = await login({
       email: email.trim(),
       password,
-      requestAdminAccess,
     });
 
     setLoading(false);
 
-    if (res.requiresAdmin2FA) {
-      // Backend verified credentials and confirmed user has admin role; transition to 2FA verification step
+    if (res.requiresAdmin2FA && res.pending2FA) {
+      setPending2FA(res.pending2FA);
       setMode('admin-2fa');
-      setInfoMessage(res.message || 'Administrator authorization required. Please verify with your official admin passcode.');
+      setInfoMessage(res.message || 'Administrative credentials recognized. Please enter your 6-digit TOTP code.');
       return;
     }
 
     if (res.success) {
-      handleAuthComplete(requestAdminAccess);
+      handleAuthComplete();
     } else {
       setError(res.error || 'Authentication failed. Please verify your credentials.');
     }
   };
 
   // ----------------------------------------------------
-  // Handler: Admin 2FA / Passcode (Step 2)
+  // Handler: 2FA Verification
   // ----------------------------------------------------
-  const handleAdmin2FASubmit = async (e: React.FormEvent) => {
+  const handle2FASubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!pending2FA) return;
+
     setLoading(true);
     setError(null);
 
-    const res = await login({
-      email: email.trim(),
-      password,
-      requestAdminAccess: true,
-      adminPasscode: adminPasscode.trim(),
+    const res = await verify2FA({
+      email: pending2FA.email,
+      tempToken: pending2FA.tempToken,
+      totpCode: totpCode.trim(),
+      masterAuthKey: masterAuthKey.trim() || undefined,
     });
 
     setLoading(false);
 
     if (res.success) {
-      handleAuthComplete(true);
+      handleAuthComplete(pending2FA.role);
     } else {
-      setError(res.error || 'Invalid administrator verification code. Access was denied.');
+      setError(res.error || 'Invalid verification credentials. Access denied.');
     }
   };
 
   // ----------------------------------------------------
-  // Handler: Register (Normal User by default)
+  // Handler: User Registration
   // ----------------------------------------------------
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
     if (regPassword !== regConfirmPassword) {
-      setError('Passwords do not match. Please re-enter your password.');
-      return;
-    }
-
-    if (regPassword.length < 6) {
-      setError('Password must contain at least 6 characters.');
+      setError('Passwords do not match. Please verify and re-type.');
       return;
     }
 
     setLoading(true);
-
     const res = await register({
       name: regName.trim(),
       email: regEmail.trim(),
       password: regPassword,
       confirmPassword: regConfirmPassword,
-      department: regDepartment.trim() || undefined,
-      academicYear: regAcademicYear || undefined,
-      phone: regPhone.trim() || undefined,
-      rollNumber: regRollNumber.trim() || undefined,
+      department: regDepartment.trim(),
+      academicYear: regAcademicYear,
+      phone: regPhone.trim(),
+      rollNumber: regRollNumber.trim(),
     });
-
     setLoading(false);
 
     if (res.success) {
-      handleAuthComplete(false);
+      handleAuthComplete('user');
     } else {
-      setError(res.error || 'Registration failed. Please check your information.');
+      setError(res.error || 'Registration failed. Please check the entered information.');
     }
   };
 
   // ----------------------------------------------------
-  // Handler: Forgot Password - Request Code
+  // Handler: Password Reset Request
   // ----------------------------------------------------
-  const handleRequestResetCode = async (e: React.FormEvent) => {
+  const handleForgotSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
@@ -206,22 +225,21 @@ export const UnifiedAuthModal: React.FC<UnifiedAuthModalProps> = ({
     if (res.success) {
       setResetStep(2);
       if (res.data?.demoCode) {
-        setInfoMessage(`Verification code dispatched. (Preview code: ${res.data.demoCode})`);
-      } else {
-        setInfoMessage('If an account exists for this email, a verification code has been dispatched.');
+        setResetCode(res.data.demoCode);
       }
+      setInfoMessage(res.message || 'Verification code sent to your registered email.');
     } else {
-      setError(res.error || 'Unable to request password reset code.');
+      setError(res.error || 'Failed to request password reset.');
     }
   };
 
   // ----------------------------------------------------
-  // Handler: Forgot Password - Reset Password
+  // Handler: Password Reset Complete
   // ----------------------------------------------------
-  const handleResetPasswordSubmit = async (e: React.FormEvent) => {
+  const handleResetSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (resetNewPassword !== resetConfirmPassword) {
-      setError('Passwords do not match. Please re-enter your password.');
+      setError('Passwords do not match.');
       return;
     }
 
@@ -234,11 +252,10 @@ export const UnifiedAuthModal: React.FC<UnifiedAuthModalProps> = ({
       newPassword: resetNewPassword,
       confirmPassword: resetConfirmPassword,
     });
-
     setLoading(false);
 
     if (res.success) {
-      setResetSuccessMessage('Your password has been successfully reset! You may now sign in.');
+      setResetSuccessMessage(res.message || 'Password reset successful!');
       setTimeout(() => {
         setMode('login');
         setEmail(resetEmail);
@@ -246,309 +263,316 @@ export const UnifiedAuthModal: React.FC<UnifiedAuthModalProps> = ({
         setResetSuccessMessage(null);
       }, 2000);
     } else {
-      setError(res.error || 'Failed to reset password. Please check your verification code.');
+      setError(res.error || 'Password reset failed.');
     }
   };
 
   // ----------------------------------------------------
-  // Fast Evaluation Demo Sign In
+  // Handler: Instant Demo Switch
   // ----------------------------------------------------
-  const handleFastDemoSignIn = async (role: 'member' | 'admin' | 'superadmin') => {
+  const handleDemoSwitch = async (targetRole: Role) => {
     setLoading(true);
     setError(null);
-    try {
-      await quickDemoLogin(role);
-      handleAuthComplete(role === 'admin' || role === 'superadmin');
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Demo sign-in failed');
-    } finally {
-      setLoading(false);
+    const ok = await demoSwitch(targetRole);
+    setLoading(false);
+    if (ok) {
+      handleAuthComplete(targetRole);
+    } else {
+      setError(`Failed to switch to role: ${targetRole}`);
     }
   };
 
   return (
     <div
       id="unified-auth-modal"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm overflow-y-auto"
+      onClick={handleClose}
     >
-      <div className="relative w-full max-w-lg bg-white border border-slate-200 shadow-2xl rounded-lg overflow-hidden flex flex-col max-h-[90vh]">
-        {/* Header Bar */}
-        <div className="bg-[#0B1528] text-white px-6 py-4 flex items-center justify-between border-b-2 border-[#C8102E]">
-          <div className="flex items-center gap-3">
-            <NssLogo size={36} showText={false} />
+      <div
+        className="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden my-8"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Top Accent Band */}
+        <div className="h-1.5 w-full bg-gradient-to-r from-blue-700 via-indigo-600 to-amber-500" />
+
+        {/* Modal Header */}
+        <div className="p-6 border-b border-slate-100 dark:border-slate-800/80 flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <NssLogo size="md" />
             <div>
-              <div className="font-serif text-base font-bold text-white tracking-tight flex items-center gap-2">
-                <span>NSS Institutional Portal</span>
-                {mode === 'admin-2fa' && (
-                  <span className="text-[10px] uppercase font-mono tracking-wider px-2 py-0.5 bg-[#C8102E] text-white rounded-xs">
-                    Admin 2FA
-                  </span>
-                )}
-              </div>
-              <p className="text-[11px] text-slate-300">
-                {mode === 'login' && 'Unified Access for Volunteers & Administrators'}
-                {mode === 'register' && 'Student & Volunteer Account Registration'}
-                {mode === 'forgot-password' && 'Self-Service Password Recovery'}
-                {mode === 'admin-2fa' && 'Administrative Security Verification'}
+              <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+                {mode === 'login' && 'NSS Unified Portal Sign In'}
+                {mode === 'register' && 'New Volunteer Cadet Registration'}
+                {mode === 'forgot-password' && 'Reset Account Password'}
+                {mode === 'admin-2fa' && 'Administrative 2FA Verification'}
+              </h2>
+              <p className="text-xs text-slate-700 dark:text-slate-300">
+                {mode === 'login' && 'Single login gateway for students, coordinators & leadership'}
+                {mode === 'register' && 'Standard volunteer enrollment (strictly verified)'}
+                {mode === 'forgot-password' && 'Enter your institutional email to recover access'}
+                {mode === 'admin-2fa' && 'Time-based One-Time Password (TOTP) verification'}
               </p>
             </div>
           </div>
           <button
+            id="close-auth-modal-btn"
             onClick={handleClose}
-            className="p-1.5 text-slate-400 hover:text-white rounded-md hover:bg-white/10 transition-colors"
-            aria-label="Close dialog"
+            className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           >
-            <X size={18} />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Mode Navigation Tabs */}
-        {mode !== 'admin-2fa' && (
-          <div className="flex border-b border-slate-200 bg-slate-50 text-xs font-semibold">
-            <button
-              type="button"
-              onClick={() => {
-                setMode('login');
-                setError(null);
-                setInfoMessage(null);
-              }}
-              className={`flex-1 py-3 text-center transition-colors border-b-2 ${
-                mode === 'login'
-                  ? 'border-[#0B1528] text-[#0B1528] bg-white font-bold'
-                  : 'border-transparent text-slate-500 hover:text-slate-900 hover:bg-slate-100/70'
-              }`}
-            >
-              Sign In
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setMode('register');
-                setError(null);
-                setInfoMessage(null);
-              }}
-              className={`flex-1 py-3 text-center transition-colors border-b-2 ${
-                mode === 'register'
-                  ? 'border-[#0B1528] text-[#0B1528] bg-white font-bold'
-                  : 'border-transparent text-slate-500 hover:text-slate-900 hover:bg-slate-100/70'
-              }`}
-            >
-              New Registration
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setMode('forgot-password');
-                setError(null);
-                setInfoMessage(null);
-              }}
-              className={`py-3 px-4 text-center transition-colors border-b-2 ${
-                mode === 'forgot-password'
-                  ? 'border-[#0B1528] text-[#0B1528] bg-white font-bold'
-                  : 'border-transparent text-slate-400 hover:text-slate-700'
-              }`}
-            >
-              Recovery
-            </button>
+        {/* Alert / Notification banners */}
+        {error && (
+          <div className="mx-6 mt-4 p-3.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 rounded-xl flex items-start space-x-3 text-rose-800 dark:text-rose-200 text-xs">
+            <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5 text-rose-600" />
+            <div>
+              <p className="font-semibold">Authentication Error</p>
+              <p className="mt-0.5">{error}</p>
+            </div>
           </div>
         )}
 
-        {/* Content Body */}
-        <div className="p-6 overflow-y-auto space-y-4">
-          {/* Alerts */}
-          {error && (
-            <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-md flex items-start gap-2 animate-in fade-in">
-              <AlertCircle size={16} className="shrink-0 mt-0.5 text-red-600" />
-              <div>
-                <span className="font-semibold">Authentication Error: </span>
-                <span>{error}</span>
-              </div>
+        {infoMessage && (
+          <div className="mx-6 mt-4 p-3 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/60 rounded-xl flex items-start space-x-3 text-blue-850 dark:text-blue-200 text-xs">
+            <Info className="w-4 h-4 flex-shrink-0 mt-0.5 text-blue-600" />
+            <div>
+              <p className="font-semibold">Notice</p>
+              <p className="mt-0.5">{infoMessage}</p>
             </div>
-          )}
+          </div>
+        )}
 
-          {infoMessage && (
-            <div className="p-3 bg-blue-50 border border-blue-200 text-blue-800 text-xs rounded-md flex items-start gap-2 animate-in fade-in">
-              <ShieldCheck size={16} className="shrink-0 mt-0.5 text-blue-600" />
-              <span>{infoMessage}</span>
-            </div>
-          )}
-
-          {resetSuccessMessage && (
-            <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-md flex items-start gap-2 animate-in fade-in">
-              <CheckCircle2 size={16} className="shrink-0 mt-0.5 text-emerald-600" />
-              <span>{resetSuccessMessage}</span>
-            </div>
-          )}
-
-          {/* MODE 1: UNIFIED LOGIN */}
+        {/* Modal Body */}
+        <div className="p-6">
+          {/* ==================================================== */}
+          {/* VIEW: LOGIN */}
+          {/* ==================================================== */}
           {mode === 'login' && (
             <form onSubmit={handleLoginSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Email / Institutional ID
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
+                  Institutional Email Address
                 </label>
                 <div className="relative">
-                  <Mail className="absolute left-3 top-2.5 text-slate-400" size={16} />
+                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <input
+                    id="auth-email-input"
                     type="email"
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="student@college.edu.in or officer@college.edu.in"
-                    className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:border-[#0B1528] focus:ring-1 focus:ring-[#0B1528]"
+                    placeholder="name@college.edu.in"
+                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 transition-all"
                   />
                 </div>
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                     Password
                   </label>
                   <button
+                    id="auth-forgot-pw-link"
                     type="button"
-                    onClick={() => setMode('forgot-password')}
-                    className="text-xs text-blue-700 hover:text-blue-900 font-medium hover:underline"
+                    onClick={() => {
+                      setMode('forgot-password');
+                      setError(null);
+                      setInfoMessage(null);
+                    }}
+                    className="text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 hover:underline"
                   >
                     Forgot password?
                   </button>
                 </div>
                 <div className="relative">
-                  <Lock className="absolute left-3 top-2.5 text-slate-400" size={16} />
+                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <input
+                    id="auth-password-input"
                     type={showPassword ? 'text' : 'password'}
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••••••"
-                    className="w-full pl-9 pr-10 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:border-[#0B1528] focus:ring-1 focus:ring-[#0B1528]"
+                    placeholder="••••••••"
+                    className="w-full pl-10 pr-10 py-2.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 transition-all"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-700"
-                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                   >
-                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
               </div>
 
-              {/* Administrator Access Checkbox (Server-side RBAC enforced) */}
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-md">
-                <label className="flex items-start gap-3 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={requestAdminAccess}
-                    onChange={(e) => setRequestAdminAccess(e.target.checked)}
-                    className="mt-0.5 rounded-sm border-slate-300 text-[#0B1528] focus:ring-[#0B1528]"
-                  />
-                  <div>
-                    <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                      <Shield size={13} className="text-[#C8102E]" />
-                      <span>Request Administrator Access</span>
-                    </div>
-                    <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
-                      For authorized Programme Officers and Directorate personnel. Requires backend privilege verification & 2FA passcode.
-                    </p>
-                  </div>
-                </label>
-              </div>
-
               <button
+                id="auth-submit-login-btn"
                 type="submit"
                 disabled={loading}
-                className="w-full py-2.5 bg-[#0B1528] text-white text-xs font-bold uppercase tracking-wider rounded-md hover:bg-[#1E3A8A] transition-colors flex items-center justify-center gap-2 shadow-xs disabled:opacity-60"
+                className="w-full mt-2 py-3 px-4 bg-gradient-to-r from-blue-700 to-indigo-700 hover:from-blue-800 hover:to-indigo-800 text-white font-semibold rounded-xl shadow-md shadow-blue-600/20 flex items-center justify-center space-x-2 transition-all disabled:opacity-50"
               >
                 {loading ? (
-                  <Loader2 className="animate-spin" size={16} />
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Verifying Credentials...</span>
+                  </>
                 ) : (
                   <>
-                    <span>{requestAdminAccess ? 'Verify & Continue as Administrator' : 'Sign In to Portal'}</span>
-                    <ArrowRight size={14} />
+                    <span>Sign In</span>
+                    <ArrowRight className="w-4 h-4" />
                   </>
                 )}
               </button>
 
-              <div className="text-center pt-2 text-xs text-slate-600">
-                <span>New volunteer or student? </span>
-                <button
-                  type="button"
-                  onClick={() => setMode('register')}
-                  className="font-bold text-[#C8102E] hover:underline"
-                >
-                  Create an account
-                </button>
+              <div className="pt-3 border-t border-slate-100 dark:border-slate-800/80 text-center">
+                <p className="text-xs text-slate-700 dark:text-slate-300">
+                  New student volunteer?{' '}
+                  <button
+                    id="auth-switch-to-register-btn"
+                    type="button"
+                    onClick={() => {
+                      setMode('register');
+                      setError(null);
+                      setInfoMessage(null);
+                    }}
+                    className="font-bold text-blue-600 dark:text-blue-400 hover:underline"
+                  >
+                    Create a Volunteer Account
+                  </button>
+                </p>
               </div>
             </form>
           )}
 
-          {/* MODE 2: ADMIN 2FA VERIFICATION (Step 2) */}
-          {mode === 'admin-2fa' && (
-            <form onSubmit={handleAdmin2FASubmit} className="space-y-4">
-              <div className="p-3.5 bg-amber-50/80 border border-amber-200 rounded-md text-xs text-amber-900 flex items-start gap-2.5">
-                <Shield className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          {/* ==================================================== */}
+          {/* VIEW: ADMIN 2FA VERIFICATION */}
+          {/* ==================================================== */}
+          {mode === 'admin-2fa' && pending2FA && (
+            <form onSubmit={handle2FASubmit} className="space-y-4">
+              <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 rounded-xl flex items-start space-x-3 text-xs text-amber-900 dark:text-amber-200">
+                <ShieldCheck className="w-4 h-4 flex-shrink-0 text-amber-600 mt-0.5" />
                 <div>
-                  <div className="font-bold text-amber-950">Administrative Verification Required</div>
-                  <p className="text-[11px] text-amber-800/90 mt-0.5">
-                    Account <strong className="font-semibold text-amber-950">{email}</strong> has verified administrative privileges. Enter your institutional security passcode or 2FA token to unlock admin management.
+                  <p className="font-semibold">
+                    Elevated Role Detected: {pending2FA.role.toUpperCase().replace(/_/g, ' ')}
+                  </p>
+                  <p className="mt-0.5">
+                    Account: <span className="font-mono">{pending2FA.email}</span>. Please enter the 6-digit TOTP code generated by your Authenticator app.
                   </p>
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Administrator Passcode / Verification Token
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
+                  6-Digit Authenticator Code (TOTP)
                 </label>
                 <div className="relative">
-                  <KeyRound className="absolute left-3 top-2.5 text-slate-400" size={16} />
+                  <KeyRound className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <input
-                    type={showPasscode ? 'text' : 'password'}
+                    id="auth-totp-input"
+                    type="text"
                     required
-                    autoFocus
-                    value={adminPasscode}
-                    onChange={(e) => setAdminPasscode(e.target.value)}
-                    placeholder="Enter official admin verification code"
-                    className="w-full pl-9 pr-10 py-2.5 text-sm font-mono tracking-widest border border-slate-300 rounded-md focus:outline-none focus:border-[#0B1528] focus:ring-1 focus:ring-[#0B1528]"
+                    maxLength={8}
+                    value={totpCode}
+                    onChange={(e) => setTotpCode(e.target.value.replace(/\s+/g, ''))}
+                    placeholder="e.g. 894216"
+                    className="w-full pl-10 pr-4 py-2.5 font-mono text-center tracking-widest text-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 transition-all"
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPasscode(!showPasscode)}
-                    className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-700"
-                    aria-label={showPasscode ? 'Hide passcode' : 'Show passcode'}
-                  >
-                    {showPasscode ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </button>
                 </div>
-                <p className="text-[11px] text-slate-400 mt-1">
-                  Validated securely on the backend. Never hardcoded on client devices.
-                </p>
               </div>
 
-              <div className="flex gap-2">
+              {/* Demo Evaluation Codes */}
+              {totpSetupInfo && (
+                <div className="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-700/60 text-xs">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-slate-500 font-medium">Evaluation Demo TOTP Codes:</span>
+                    <span className="text-[10px] font-mono text-slate-400">Secret: {totpSetupInfo.secret}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {totpSetupInfo.demoBypassCodes.map((code) => (
+                      <button
+                        key={code}
+                        type="button"
+                        onClick={() => setTotpCode(code)}
+                        className="px-2.5 py-1 bg-white dark:bg-slate-700 hover:bg-blue-50 dark:hover:bg-slate-600 border border-slate-200 dark:border-slate-600 rounded text-xs font-mono font-bold text-blue-700 dark:text-blue-300 transition-colors"
+                      >
+                        {code}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Super Admin Level 2 Master Key Input */}
+              {pending2FA.isSuperAdmin2 && (
+                <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-rose-700 dark:text-rose-400 uppercase tracking-wider">
+                      Master Authorization Key (Level 2 Required)
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowMasterKey(!showMasterKey)}
+                      className="text-xs text-slate-400 hover:text-slate-600"
+                    >
+                      {showMasterKey ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <Shield className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-rose-500" />
+                    <input
+                      id="auth-master-key-input"
+                      type={showMasterKey ? 'text' : 'password'}
+                      required
+                      value={masterAuthKey}
+                      onChange={(e) => setMasterAuthKey(e.target.value)}
+                      placeholder="Enter Master Level 2 Auth Key"
+                      className="w-full pl-10 pr-4 py-2 bg-rose-50/50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900 rounded-xl text-sm font-mono text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Evaluation Key:{' '}
+                    <button
+                      type="button"
+                      onClick={() => setMasterAuthKey('MASTER-LEVEL2-KEY-9942')}
+                      className="text-rose-600 dark:text-rose-400 font-mono underline hover:no-underline"
+                    >
+                      MASTER-LEVEL2-KEY-9942
+                    </button>
+                  </p>
+                </div>
+              )}
+
+              <div className="flex items-center space-x-3 pt-2">
                 <button
                   type="button"
                   onClick={() => {
                     setMode('login');
-                    setAdminPasscode('');
+                    setPending2FA(null);
                     setError(null);
                   }}
-                  className="w-1/3 py-2.5 border border-slate-300 text-slate-700 text-xs font-bold uppercase tracking-wider rounded-md hover:bg-slate-50 transition-colors flex items-center justify-center gap-1.5"
+                  className="w-1/3 py-2.5 px-4 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold rounded-xl text-xs flex items-center justify-center space-x-1"
                 >
-                  <ArrowLeft size={14} />
+                  <ArrowLeft className="w-3.5 h-3.5" />
                   <span>Back</span>
                 </button>
                 <button
+                  id="auth-verify-2fa-btn"
                   type="submit"
-                  disabled={loading || !adminPasscode}
-                  className="w-2/3 py-2.5 bg-[#C8102E] text-white text-xs font-bold uppercase tracking-wider rounded-md hover:bg-[#9B0D22] transition-colors flex items-center justify-center gap-2 shadow-xs disabled:opacity-60"
+                  disabled={loading || !totpCode}
+                  className="w-2/3 py-2.5 px-4 bg-gradient-to-r from-amber-600 to-indigo-700 hover:from-amber-700 hover:to-indigo-800 text-white font-semibold rounded-xl shadow-md text-xs flex items-center justify-center space-x-2 disabled:opacity-50"
                 >
                   {loading ? (
-                    <Loader2 className="animate-spin" size={16} />
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Verifying...</span>
+                    </>
                   ) : (
                     <>
-                      <ShieldCheck size={16} />
-                      <span>Authenticate & Enter Admin</span>
+                      <ShieldCheck className="w-4 h-4" />
+                      <span>Verify & Enter Portal</span>
                     </>
                   )}
                 </button>
@@ -556,350 +580,327 @@ export const UnifiedAuthModal: React.FC<UnifiedAuthModalProps> = ({
             </form>
           )}
 
-          {/* MODE 3: UNIFIED REGISTRATION */}
+          {/* ==================================================== */}
+          {/* VIEW: REGISTER (NORMAL USER ONLY - NO ROLE SELECTION) */}
+          {/* ==================================================== */}
           {mode === 'register' && (
             <form onSubmit={handleRegisterSubmit} className="space-y-3.5">
-              <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-md text-[11px] text-slate-600">
-                <span className="font-semibold text-slate-800">Registration Notice: </span>
-                All student registrations create a Member account with access to volunteer applications and certificates. Administrative privileges are provisioned server-side by institutional officers.
+              <div className="p-2.5 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/50 rounded-xl text-xs text-blue-700 dark:text-blue-300 flex items-center space-x-2">
+                <Info className="w-4 h-4 flex-shrink-0" />
+                <span>All registrations default strictly to Student Volunteer Cadet.</span>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Full Name *
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
+                  Full Name
                 </label>
                 <div className="relative">
-                  <UserIcon className="absolute left-3 top-2.5 text-slate-400" size={16} />
+                  <UserIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <input
                     type="text"
                     required
                     value={regName}
                     onChange={(e) => setRegName(e.target.value)}
-                    placeholder="e.g. Priya Deshmukh"
-                    className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:border-[#0B1528] focus:ring-1 focus:ring-[#0B1528]"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Email Address *
-                </label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-2.5 text-slate-400" size={16} />
-                  <input
-                    type="email"
-                    required
-                    value={regEmail}
-                    onChange={(e) => setRegEmail(e.target.value)}
-                    placeholder="student@college.edu.in"
-                    className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:border-[#0B1528] focus:ring-1 focus:ring-[#0B1528]"
+                    placeholder="e.g. Rahul Sharma"
+                    className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Password *
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
+                    Institutional Email
                   </label>
                   <div className="relative">
-                    <Lock className="absolute left-3 top-2.5 text-slate-400" size={16} />
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
                     <input
-                      type="password"
+                      type="email"
                       required
-                      value={regPassword}
-                      onChange={(e) => setRegPassword(e.target.value)}
-                      placeholder="Min. 6 chars"
-                      className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:border-[#0B1528] focus:ring-1 focus:ring-[#0B1528]"
+                      value={regEmail}
+                      onChange={(e) => setRegEmail(e.target.value)}
+                      placeholder="student@college.edu.in"
+                      className="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600"
                     />
                   </div>
                 </div>
+
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Confirm Password *
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
+                    Phone Number
                   </label>
                   <div className="relative">
-                    <Lock className="absolute left-3 top-2.5 text-slate-400" size={16} />
+                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
                     <input
-                      type="password"
-                      required
-                      value={regConfirmPassword}
-                      onChange={(e) => setRegConfirmPassword(e.target.value)}
-                      placeholder="Re-type password"
-                      className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:border-[#0B1528] focus:ring-1 focus:ring-[#0B1528]"
+                      type="tel"
+                      value={regPhone}
+                      onChange={(e) => setRegPhone(e.target.value)}
+                      placeholder="+91 98765 43210"
+                      className="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600"
                     />
                   </div>
                 </div>
               </div>
 
-              {/* Optional Profile Information */}
-              <div className="pt-2 border-t border-slate-100">
-                <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
-                  Academic Information (Optional)
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
+                    Department
+                  </label>
+                  <input
+                    type="text"
+                    value={regDepartment}
+                    onChange={(e) => setRegDepartment(e.target.value)}
+                    placeholder="e.g. Computer Science"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  />
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[11px] font-medium text-slate-600 mb-1">
-                      Department / Branch
-                    </label>
-                    <div className="relative">
-                      <Building className="absolute left-3 top-2 text-slate-400" size={14} />
-                      <input
-                        type="text"
-                        value={regDepartment}
-                        onChange={(e) => setRegDepartment(e.target.value)}
-                        placeholder="e.g. Computer Science"
-                        className="w-full pl-8 pr-2.5 py-1.5 text-xs border border-slate-300 rounded-md focus:outline-none focus:border-[#0B1528]"
-                      />
-                    </div>
-                  </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
+                    Roll Number
+                  </label>
+                  <input
+                    type="text"
+                    value={regRollNumber}
+                    onChange={(e) => setRegRollNumber(e.target.value)}
+                    placeholder="e.g. CS-2024-042"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
+                    Academic Year
+                  </label>
+                  <select
+                    value={regAcademicYear}
+                    onChange={(e) => setRegAcademicYear(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  >
+                    <option value="2025–26">2025–26</option>
+                    <option value="2024–25">2024–25</option>
+                    <option value="2023–24">2023–24</option>
+                  </select>
+                </div>
+              </div>
 
-                  <div>
-                    <label className="block text-[11px] font-medium text-slate-600 mb-1">
-                      Academic Year
-                    </label>
-                    <div className="relative">
-                      <GraduationCap className="absolute left-3 top-2 text-slate-400" size={14} />
-                      <select
-                        value={regAcademicYear}
-                        onChange={(e) => setRegAcademicYear(e.target.value)}
-                        className="w-full pl-8 pr-2.5 py-1.5 text-xs border border-slate-300 rounded-md bg-white focus:outline-none focus:border-[#0B1528]"
-                      >
-                        <option value="">Select Year</option>
-                        <option value="1st Year">1st Year</option>
-                        <option value="2nd Year">2nd Year</option>
-                        <option value="3rd Year">3rd Year</option>
-                        <option value="Final Year">Final Year</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-medium text-slate-600 mb-1">
-                      Roll / Student ID
-                    </label>
-                    <div className="relative">
-                      <Hash className="absolute left-3 top-2 text-slate-400" size={14} />
-                      <input
-                        type="text"
-                        value={regRollNumber}
-                        onChange={(e) => setRegRollNumber(e.target.value)}
-                        placeholder="e.g. 2024-CS-084"
-                        className="w-full pl-8 pr-2.5 py-1.5 text-xs border border-slate-300 rounded-md focus:outline-none focus:border-[#0B1528]"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-medium text-slate-600 mb-1">
-                      Contact Phone
-                    </label>
-                    <div className="relative">
-                      <Phone className="absolute left-3 top-2 text-slate-400" size={14} />
-                      <input
-                        type="tel"
-                        value={regPhone}
-                        onChange={(e) => setRegPhone(e.target.value)}
-                        placeholder="+91 9876543210"
-                        className="w-full pl-8 pr-2.5 py-1.5 text-xs border border-slate-300 rounded-md focus:outline-none focus:border-[#0B1528]"
-                      />
-                    </div>
-                  </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
+                    Password
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    minLength={6}
+                    value={regPassword}
+                    onChange={(e) => setRegPassword(e.target.value)}
+                    placeholder="Min 6 characters"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
+                    Confirm Password
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    value={regConfirmPassword}
+                    onChange={(e) => setRegConfirmPassword(e.target.value)}
+                    placeholder="Repeat password"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  />
                 </div>
               </div>
 
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-2.5 bg-[#0B1528] text-white text-xs font-bold uppercase tracking-wider rounded-md hover:bg-[#1E3A8A] transition-colors flex items-center justify-center gap-2 shadow-xs disabled:opacity-60"
+                className="w-full mt-2 py-2.5 px-4 bg-gradient-to-r from-blue-700 to-indigo-700 hover:from-blue-800 hover:to-indigo-800 text-white font-semibold rounded-xl text-sm shadow flex items-center justify-center space-x-2 disabled:opacity-50"
               >
-                {loading ? <Loader2 className="animate-spin" size={16} /> : <span>Complete Registration</span>}
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Creating Cadet Account...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Register as Volunteer Cadet</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
               </button>
 
-              <div className="text-center pt-2 text-xs text-slate-600">
-                <span>Already have an account? </span>
+              <div className="pt-2 text-center">
                 <button
                   type="button"
-                  onClick={() => setMode('login')}
-                  className="font-bold text-[#0B1528] hover:underline"
+                  onClick={() => {
+                    setMode('login');
+                    setError(null);
+                  }}
+                  className="text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
                 >
-                  Sign In
+                  Already registered? <span className="font-semibold text-blue-600">Sign in here</span>
                 </button>
               </div>
             </form>
           )}
 
-          {/* MODE 4: FORGOT PASSWORD */}
+          {/* ==================================================== */}
+          {/* VIEW: FORGOT / RESET PASSWORD */}
+          {/* ==================================================== */}
           {mode === 'forgot-password' && (
             <div className="space-y-4">
-              {resetStep === 1 ? (
-                <form onSubmit={handleRequestResetCode} className="space-y-4">
-                  <p className="text-xs text-slate-600 leading-relaxed">
-                    Enter the email address associated with your NSS portal account. We will dispatch a 6-digit verification code to reset your password.
+              {resetSuccessMessage ? (
+                <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 rounded-xl text-center space-y-2">
+                  <CheckCircle2 className="w-8 h-8 text-emerald-600 mx-auto" />
+                  <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-200">
+                    {resetSuccessMessage}
                   </p>
-
+                  <p className="text-xs text-slate-500">Redirecting to sign in...</p>
+                </div>
+              ) : resetStep === 1 ? (
+                <form onSubmit={handleForgotSubmit} className="space-y-4">
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                      Registered Email
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
+                      Enter Registered Institutional Email
                     </label>
                     <div className="relative">
-                      <Mail className="absolute left-3 top-2.5 text-slate-400" size={16} />
+                      <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                       <input
                         type="email"
                         required
                         value={resetEmail}
                         onChange={(e) => setResetEmail(e.target.value)}
                         placeholder="your.email@college.edu.in"
-                        className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:border-[#0B1528]"
+                        className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-sm"
                       />
                     </div>
                   </div>
 
-                  <div className="flex gap-2">
+                  <div className="flex items-center space-x-3">
                     <button
                       type="button"
                       onClick={() => setMode('login')}
-                      className="w-1/3 py-2 border border-slate-300 text-slate-700 text-xs font-bold uppercase tracking-wider rounded-md hover:bg-slate-50 transition-colors"
+                      className="w-1/3 py-2.5 bg-slate-100 dark:bg-slate-800 text-xs font-semibold rounded-xl"
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
-                      disabled={loading || !resetEmail}
-                      className="w-2/3 py-2 bg-[#0B1528] text-white text-xs font-bold uppercase tracking-wider rounded-md hover:bg-[#1E3A8A] transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
+                      disabled={loading}
+                      className="w-2/3 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs rounded-xl flex items-center justify-center space-x-2"
                     >
-                      {loading ? <Loader2 className="animate-spin" size={16} /> : <span>Send Reset Code</span>}
+                      {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>Send Reset Code</span>}
                     </button>
                   </div>
                 </form>
               ) : (
-                <form onSubmit={handleResetPasswordSubmit} className="space-y-3.5">
-                  <p className="text-xs text-slate-600">
-                    Verification code dispatched to <strong>{resetEmail}</strong>. Enter the code and your new password.
-                  </p>
-
+                <form onSubmit={handleResetSubmit} className="space-y-3">
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
                       6-Digit Verification Code
                     </label>
-                    <div className="relative">
-                      <KeyRound className="absolute left-3 top-2.5 text-slate-400" size={16} />
-                      <input
-                        type="text"
-                        required
-                        maxLength={6}
-                        value={resetCode}
-                        onChange={(e) => setResetCode(e.target.value)}
-                        placeholder="123456"
-                        className="w-full pl-9 pr-3 py-2 text-sm font-mono tracking-widest border border-slate-300 rounded-md focus:outline-none focus:border-[#0B1528]"
-                      />
-                    </div>
+                    <input
+                      type="text"
+                      required
+                      value={resetCode}
+                      onChange={(e) => setResetCode(e.target.value)}
+                      placeholder="Enter OTP"
+                      className="w-full px-3 py-2 bg-slate-50 border rounded-xl font-mono text-center text-sm"
+                    />
                   </div>
-
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                      New Password
-                    </label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-2.5 text-slate-400" size={16} />
-                      <input
-                        type="password"
-                        required
-                        value={resetNewPassword}
-                        onChange={(e) => setResetNewPassword(e.target.value)}
-                        placeholder="••••••••••••"
-                        className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:border-[#0B1528]"
-                      />
-                    </div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">New Password</label>
+                    <input
+                      type="password"
+                      required
+                      minLength={6}
+                      value={resetNewPassword}
+                      onChange={(e) => setResetNewPassword(e.target.value)}
+                      placeholder="Min 6 characters"
+                      className="w-full px-3 py-2 bg-slate-50 border rounded-xl text-xs"
+                    />
                   </div>
-
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                      Confirm New Password
-                    </label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-2.5 text-slate-400" size={16} />
-                      <input
-                        type="password"
-                        required
-                        value={resetConfirmPassword}
-                        onChange={(e) => setResetConfirmPassword(e.target.value)}
-                        placeholder="••••••••••••"
-                        className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:border-[#0B1528]"
-                      />
-                    </div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Confirm New Password</label>
+                    <input
+                      type="password"
+                      required
+                      value={resetConfirmPassword}
+                      onChange={(e) => setResetConfirmPassword(e.target.value)}
+                      placeholder="Repeat new password"
+                      className="w-full px-3 py-2 bg-slate-50 border rounded-xl text-xs"
+                    />
                   </div>
-
-                  <div className="flex gap-2 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => setResetStep(1)}
-                      className="w-1/3 py-2 border border-slate-300 text-slate-700 text-xs font-bold uppercase tracking-wider rounded-md hover:bg-slate-50 transition-colors"
-                    >
-                      Back
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={loading || !resetCode || !resetNewPassword}
-                      className="w-2/3 py-2 bg-[#C8102E] text-white text-xs font-bold uppercase tracking-wider rounded-md hover:bg-[#9B0D22] transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
-                    >
-                      {loading ? <Loader2 className="animate-spin" size={16} /> : <span>Update Password</span>}
-                    </button>
-                  </div>
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs rounded-xl"
+                  >
+                    {loading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Set New Password'}
+                  </button>
                 </form>
               )}
             </div>
           )}
+        </div>
 
-          {/* Quick Evaluation / Role Simulator */}
-          <div className="pt-3 border-t border-slate-200">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                Evaluation Access (1-Click Switch):
-              </span>
-              <span className="text-[10px] text-slate-400 font-mono">Backend RBAC</span>
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => handleFastDemoSignIn('member')}
-                disabled={loading}
-                className="p-2 text-left border border-slate-200 bg-slate-50 hover:bg-slate-100 transition-colors rounded-md text-[11px] group"
-              >
-                <div className="font-bold text-slate-800 flex items-center gap-1">
-                  <UserIcon size={12} className="text-slate-600" />
-                  <span>Student</span>
-                </div>
-                <div className="text-[10px] text-slate-500 truncate">Member Role</div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleFastDemoSignIn('admin')}
-                disabled={loading}
-                className="p-2 text-left border border-blue-200 bg-blue-50/70 hover:bg-blue-100 transition-colors rounded-md text-[11px] group"
-              >
-                <div className="font-bold text-blue-900 flex items-center gap-1">
-                  <ShieldCheck size={12} className="text-blue-600" />
-                  <span>College PO</span>
-                </div>
-                <div className="text-[10px] text-blue-700/80 truncate">Unit 04 & 05</div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleFastDemoSignIn('superadmin')}
-                disabled={loading}
-                className="p-2 text-left border border-purple-200 bg-purple-50/70 hover:bg-purple-100 transition-colors rounded-md text-[11px] group"
-              >
-                <div className="font-bold text-purple-900 flex items-center gap-1">
-                  <ShieldCheck size={12} className="text-purple-600" />
-                  <span>Directorate</span>
-                </div>
-                <div className="text-[10px] text-purple-700/80 truncate">Superadmin</div>
-              </button>
-            </div>
+        {/* Evaluation Quick Demo Role Switcher Strip */}
+        <div className="px-6 py-3.5 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-800/80">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center space-x-1">
+              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+              <span>Instant Evaluation Tiers (5 Roles)</span>
+            </span>
+            <span className="text-[10px] text-slate-400">Click to preview portal</span>
+          </div>
+          <div className="grid grid-cols-5 gap-1.5 text-center">
+            <button
+              id="demo-switch-user"
+              type="button"
+              onClick={() => handleDemoSwitch('user')}
+              className="px-1.5 py-1.5 bg-white dark:bg-slate-700 hover:bg-blue-50 dark:hover:bg-slate-600 border border-slate-200 dark:border-slate-600 rounded-lg text-[10px] font-semibold text-slate-700 dark:text-slate-200 truncate"
+              title="Student Volunteer"
+            >
+              User
+            </button>
+            <button
+              id="demo-switch-coordinator"
+              type="button"
+              onClick={() => handleDemoSwitch('coordinator')}
+              className="px-1.5 py-1.5 bg-white dark:bg-slate-700 hover:bg-purple-50 dark:hover:bg-slate-600 border border-slate-200 dark:border-slate-600 rounded-lg text-[10px] font-semibold text-purple-700 dark:text-purple-300 truncate"
+              title="Cadre Coordinator"
+            >
+              Coordinator
+            </button>
+            <button
+              id="demo-switch-admin"
+              type="button"
+              onClick={() => handleDemoSwitch('admin')}
+              className="px-1.5 py-1.5 bg-white dark:bg-slate-700 hover:bg-blue-50 dark:hover:bg-slate-600 border border-slate-200 dark:border-slate-600 rounded-lg text-[10px] font-semibold text-blue-700 dark:text-blue-300 truncate"
+              title="Programme Officer Admin"
+            >
+              Admin
+            </button>
+            <button
+              id="demo-switch-super1"
+              type="button"
+              onClick={() => handleDemoSwitch('super_admin_1')}
+              className="px-1.5 py-1.5 bg-white dark:bg-slate-700 hover:bg-indigo-50 dark:hover:bg-slate-600 border border-slate-200 dark:border-slate-600 rounded-lg text-[10px] font-semibold text-indigo-700 dark:text-indigo-300 truncate"
+              title="Regional Directorate"
+            >
+              Super 1
+            </button>
+            <button
+              id="demo-switch-super2"
+              type="button"
+              onClick={() => handleDemoSwitch('super_admin_2')}
+              className="px-1.5 py-1.5 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 border border-rose-200 dark:border-rose-800 rounded-lg text-[10px] font-semibold text-rose-700 dark:text-rose-300 truncate"
+              title="Web Master Control Center"
+            >
+              Super 2
+            </button>
           </div>
         </div>
       </div>

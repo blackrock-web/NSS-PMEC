@@ -33,7 +33,7 @@ const upload = multer({
 uploadsRouter.post(
   '/image',
   requireRole('admin', 'superadmin'),
-  upload.single('file'),
+  upload.single('file') as any,
   async (req: AuthenticatedRequest, res) => {
     try {
       if (!req.file) {
@@ -74,7 +74,7 @@ uploadsRouter.post(
 uploadsRouter.post(
   '/pdf',
   requireRole('admin', 'superadmin'),
-  upload.single('file'),
+  upload.single('file') as any,
   async (req: AuthenticatedRequest, res) => {
     try {
       if (!req.file) {

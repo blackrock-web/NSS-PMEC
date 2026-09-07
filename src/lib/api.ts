@@ -1,8 +1,14 @@
 import type {
   ApiResponse,
   User,
+  Role,
   TenantConfig,
+  SiteCmsContent,
+  ExternalDataSource,
+  AuditTrailDiff,
+  LiveAnalyticsData,
   EventItem,
+  EventRegistration,
   Activity,
   Achievement,
   GalleryPhoto,
@@ -89,15 +95,44 @@ export const api = {
     login: (body: {
       email: string;
       password?: string;
-      requestAdminAccess?: boolean;
-      adminPasscode?: string;
-      role?: 'member' | 'admin' | 'superadmin';
       idToken?: string;
     }) =>
-      request<{ token?: string; user?: User; requiresAdmin2FA?: boolean }>('/auth/login', {
+      request<{
+        token?: string;
+        user?: User;
+        requiresAdmin2FA?: boolean;
+        tempToken?: string;
+        email?: string;
+        role?: Role;
+        isSuperAdmin2?: boolean;
+      }>('/auth/login', {
         method: 'POST',
         body: JSON.stringify(body),
       }),
+
+    verify2FA: (body: {
+      email: string;
+      tempToken: string;
+      totpCode: string;
+      masterAuthKey?: string;
+    }) =>
+      request<{ token: string; user: User }>('/auth/verify-2fa', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+
+    getTotpSetup: (email?: string) => {
+      const query = email ? `?email=${encodeURIComponent(email)}` : '';
+      return request<{
+        secret: string;
+        issuer: string;
+        account: string;
+        otpauthUrl: string;
+        demoBypassCodes: string[];
+        masterKeyHint: string;
+      }>(`/auth/totp-setup${query}`);
+    },
+
     register: (body: {
       name: string;
       email: string;
@@ -112,11 +147,19 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(body),
       }),
+
+    demoSwitch: (role: Role) =>
+      request<{ token: string; user: User }>('/auth/demo-switch', {
+        method: 'POST',
+        body: JSON.stringify({ role }),
+      }),
+
     forgotPassword: (email: string) =>
       request<{ email?: string; demoCode?: string }>('/auth/forgot-password', {
         method: 'POST',
         body: JSON.stringify({ email }),
       }),
+
     resetPassword: (body: {
       email: string;
       code: string;
@@ -127,14 +170,25 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(body),
       }),
+
     getUsers: () => request<User[]>('/auth/users'),
-    updateUserRole: (id: string, body: { role?: 'member' | 'admin' | 'superadmin'; isActive?: boolean }) =>
+
+    updateUserRole: (
+      id: string,
+      body: { role?: Role; isActive?: boolean; assignedEventIds?: string[] }
+    ) =>
       request<User>(`/auth/users/${id}/role`, {
         method: 'PUT',
         body: JSON.stringify(body),
       }),
+
     getMe: () => request<{ user: User }>('/auth/me'),
+
     logout: () => request('/auth/logout', { method: 'POST' }),
+  },
+
+  analytics: {
+    getSummary: () => request<LiveAnalyticsData>('/analytics/summary'),
   },
 
   tenant: {
@@ -144,22 +198,31 @@ export const api = {
         method: 'PUT',
         body: JSON.stringify(data),
       }),
-    listTenants: () => request<TenantConfig[]>('/tenant/admin/tenants'),
-    listAll: () => request<TenantConfig[]>('/tenant/admin/tenants'),
-    provisionTenant: (data: {
-      id: string;
-      collegeName: string;
-      collegeFullName: string;
-      universityAffiliation: string;
-      programmeOfficerName: string;
-      email: string;
-      phone: string;
-    }) =>
-      request<TenantConfig>('/tenant/admin/tenants', {
+    getCms: () => request<SiteCmsContent>('/tenant/cms'),
+    updateCms: (data: Partial<SiteCmsContent>) =>
+      request<SiteCmsContent>('/tenant/cms', {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
+    getDataSources: () => request<ExternalDataSource[]>('/tenant/data-sources'),
+    createDataSource: (data: Partial<ExternalDataSource>) =>
+      request<ExternalDataSource>('/tenant/data-sources', {
         method: 'POST',
         body: JSON.stringify(data),
       }),
-    provision: (data: {
+    updateDataSource: (id: string, data: Partial<ExternalDataSource>) =>
+      request<ExternalDataSource>(`/tenant/data-sources/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
+    deleteDataSource: (id: string) =>
+      request(`/tenant/data-sources/${id}`, {
+        method: 'DELETE',
+      }),
+    getAuditDiffs: () => request<AuditTrailDiff[]>('/tenant/audit-diffs'),
+    listTenants: () => request<TenantConfig[]>('/tenant/admin/tenants'),
+    listAll: () => request<TenantConfig[]>('/tenant/admin/tenants'),
+    provisionTenant: (data: {
       id: string;
       collegeName: string;
       collegeFullName: string;
@@ -194,6 +257,22 @@ export const api = {
       request(`/events/${id}`, {
         method: 'DELETE',
       }),
+    register: (id: string, data?: { phone?: string; rollNumber?: string; department?: string }) =>
+      request<EventRegistration>(`/events/${id}/register`, {
+        method: 'POST',
+        body: JSON.stringify(data || {}),
+      }),
+    getMyRegistrations: () => request<EventRegistration[]>('/events/my/registrations'),
+    getRegistrations: (id: string) => request<EventRegistration[]>(`/events/${id}/registrations`),
+    updateAttendance: (
+      id: string,
+      regId: string,
+      data: { status: 'attended' | 'absent' | 'registered'; coordinatorNotes?: string }
+    ) =>
+      request(`/events/${id}/attendance/${regId}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
   },
 
   activities: {
@@ -223,9 +302,15 @@ export const api = {
       const query = new URLSearchParams(params as Record<string, string>).toString();
       return request<GalleryPhoto[]>(`/gallery${query ? `?${query}` : ''}`);
     },
+    getFeatured: () => request<GalleryPhoto[]>('/gallery/featured'),
     create: (data: Partial<GalleryPhoto>) =>
       request<GalleryPhoto>('/gallery', {
         method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    update: (id: string, data: Partial<GalleryPhoto>) =>
+      request<GalleryPhoto>(`/gallery/${id}`, {
+        method: 'PUT',
         body: JSON.stringify(data),
       }),
     delete: (id: string) =>

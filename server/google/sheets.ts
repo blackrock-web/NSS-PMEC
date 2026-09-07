@@ -12,6 +12,10 @@ import type {
   ContactMessageRecord,
   User,
   AuditLogEntry,
+  SiteCmsContent,
+  ExternalDataSource,
+  AuditTrailDiff,
+  EventRegistration,
 } from '../../src/types/index.js';
 
 let sheetsClient: ReturnType<typeof google.sheets> | null = null;
@@ -145,36 +149,326 @@ const mockTenants: TenantConfig[] = [
 
 const mockUsers: User[] = [
   {
-    id: 'user-superadmin',
+    id: 'user-owner-level2',
+    email: 'owner@college.edu.in',
+    name: 'Dr. Rajeshwar Sen (Director & Web Master)',
+    role: 'super_admin_2',
+    collegeId: 'all',
+    collegeName: 'National NSS Directorate & Institutional Cell',
+    totpEnabled: true,
+    totpSecret: 'JBSWY3DPEHPK3PXP',
+    department: 'Directorate Office',
+    phone: '+91 98765 00001',
+    createdAt: '2026-01-01T00:00:00Z',
+    isActive: true,
+  },
+  {
+    id: 'user-superadmin1',
+    email: 'superadmin1@college.edu.in',
+    name: 'Prof. Meenakshi Sundaram (Regional Directorate)',
+    role: 'super_admin_1',
+    collegeId: 'all',
+    collegeName: 'National NSS Directorate',
+    totpEnabled: true,
+    totpSecret: 'JBSWY3DPEHPK3PXP',
+    department: 'Regional Operations',
+    phone: '+91 98765 00002',
+    createdAt: '2026-01-01T00:00:00Z',
+    isActive: true,
+  },
+  {
+    id: 'user-superadmin-legacy',
     email: 'superadmin@nss-portal.gov.in',
     name: 'National Directorate Admin',
     role: 'superadmin',
     collegeId: 'all',
     collegeName: 'National NSS Directorate',
+    totpEnabled: true,
+    totpSecret: 'JBSWY3DPEHPK3PXP',
     createdAt: '2026-01-01T00:00:00Z',
     isActive: true,
   },
   {
     id: 'user-po-verma',
+    email: 'admin@college.edu.in',
+    name: 'Dr. Anand Verma (Programme Officer)',
+    role: 'admin',
+    collegeId: 'unit-04-05',
+    collegeName: 'Government Model Autonomous College',
+    totpEnabled: true,
+    totpSecret: 'JBSWY3DPEHPK3PXP',
+    department: 'Chemistry & NSS Directorate',
+    phone: '+91 98765 43210',
+    createdAt: '2026-01-01T00:00:00Z',
+    isActive: true,
+  },
+  {
+    id: 'user-po-verma-alt',
     email: 'programme.officer@college.edu.in',
     name: 'Dr. Anand Verma',
     role: 'admin',
     collegeId: 'unit-04-05',
     collegeName: 'Government Model Autonomous College',
+    totpEnabled: true,
+    totpSecret: 'JBSWY3DPEHPK3PXP',
     createdAt: '2026-01-01T00:00:00Z',
     isActive: true,
   },
   {
-    id: 'user-volunteer-lead',
-    email: 'volunteer.lead@college.edu.in',
-    name: 'Pooja Sharma',
-    role: 'admin',
+    id: 'user-coordinator',
+    email: 'coordinator@college.edu.in',
+    name: 'Pooja Sharma (Senior Cadre Coordinator)',
+    role: 'coordinator',
     collegeId: 'unit-04-05',
     collegeName: 'Government Model Autonomous College',
+    totpEnabled: true,
+    totpSecret: 'JBSWY3DPEHPK3PXP',
+    assignedEventIds: ['ev-1', 'ev-2', 'ev-3'],
+    department: 'Computer Science',
+    academicYear: '3rd Year',
+    rollNumber: 'CS-2023-018',
+    phone: '+91 98765 11223',
     createdAt: '2026-01-10T00:00:00Z',
     isActive: true,
-  }
+  },
+  {
+    id: 'user-regular',
+    email: 'user@college.edu.in',
+    name: 'Rahul Sharma (Volunteer Cadet)',
+    role: 'user',
+    collegeId: 'unit-04-05',
+    collegeName: 'Government Model Autonomous College',
+    department: 'Information Technology',
+    academicYear: '2nd Year',
+    rollNumber: 'IT-2024-042',
+    phone: '+91 98765 88990',
+    createdAt: '2026-02-15T00:00:00Z',
+    isActive: true,
+  },
 ];
+
+const mockEventRegistrations: EventRegistration[] = [
+  {
+    id: 'reg-1',
+    eventId: 'ev-1',
+    eventTitle: 'Mega Blood Donation Drive 2026',
+    userId: 'user-regular',
+    userName: 'Rahul Sharma',
+    userEmail: 'user@college.edu.in',
+    phone: '+91 98765 88990',
+    rollNumber: 'IT-2024-042',
+    department: 'Information Technology',
+    status: 'registered',
+    registeredAt: '2026-08-28T10:30:00Z',
+  },
+  {
+    id: 'reg-2',
+    eventId: 'ev-1',
+    eventTitle: 'Mega Blood Donation Drive 2026',
+    userId: 'user-vol-1',
+    userName: 'Rohan Deshmukh',
+    userEmail: 'rohan.deshmukh@student.edu.in',
+    phone: '+91 98765 22334',
+    rollNumber: 'CS-2025-042',
+    department: 'Computer Science',
+    status: 'registered',
+    registeredAt: '2026-08-29T11:15:00Z',
+  },
+  {
+    id: 'reg-3',
+    eventId: 'ev-2',
+    eventTitle: 'Poshan Maah Community Nutrition Walkathon',
+    userId: 'user-regular',
+    userName: 'Rahul Sharma',
+    userEmail: 'user@college.edu.in',
+    phone: '+91 98765 88990',
+    rollNumber: 'IT-2024-042',
+    department: 'Information Technology',
+    status: 'registered',
+    registeredAt: '2026-08-30T14:20:00Z',
+  },
+  {
+    id: 'reg-4',
+    eventId: 'ev-3',
+    eventTitle: 'Riverfront Cleanliness & Eco-Restoration Shramdaan',
+    userId: 'user-regular',
+    userName: 'Rahul Sharma',
+    userEmail: 'user@college.edu.in',
+    phone: '+91 98765 88990',
+    rollNumber: 'IT-2024-042',
+    department: 'Information Technology',
+    status: 'attended',
+    registeredAt: '2026-08-10T09:00:00Z',
+    attendedAt: '2026-08-15T06:30:00Z',
+    coordinatorNotes: 'Exemplary participation during shoreline plastic retrieval.',
+  },
+];
+
+const mockExternalDataSources: ExternalDataSource[] = [
+  {
+    id: 'src-1',
+    name: 'Central Institutional Archive (Google Drive)',
+    url: 'https://drive.google.com/drive/folders/1A2B3C4D5E6F7G8H9-CentralRootArchive',
+    description: 'Master storage root for institutional certificates, high-res photos, and audited annual accounts.',
+    type: 'google_drive',
+    isActive: true,
+    priority: 1,
+    folderId: '1A2B3C4D5E6F7G8H9-CentralRootArchive',
+    lastVerifiedAt: '2026-09-06T12:00:00Z',
+  },
+  {
+    id: 'src-2',
+    name: 'Special Camp 2026 Media Repository',
+    url: 'https://drive.google.com/drive/folders/1B3C4D5E6F7G8H9A0-SpecialCamp2026',
+    description: 'Raw uncompressed drone footage, high-resolution photography, and shramdaan survey registers.',
+    type: 'google_drive',
+    isActive: true,
+    priority: 2,
+    folderId: '1B3C4D5E6F7G8H9A0-SpecialCamp2026',
+    lastVerifiedAt: '2026-09-05T14:30:00Z',
+  },
+  {
+    id: 'src-3',
+    name: 'Blood Donors Registry & Red Cross Liaison',
+    url: 'https://drive.google.com/drive/folders/1C4D5E6F7G8H9A0B1-BloodDonorsRegistry',
+    description: 'Encrypted donor contact lists and medical verification logs shared with District Red Cross Blood Bank.',
+    type: 'google_drive',
+    isActive: true,
+    priority: 3,
+    folderId: '1C4D5E6F7G8H9A0B1-BloodDonorsRegistry',
+    lastVerifiedAt: '2026-09-04T09:15:00Z',
+  },
+];
+
+const mockAuditTrailDiffs: AuditTrailDiff[] = [
+  {
+    id: 'diff-1',
+    timestamp: '2026-09-06T18:42:10Z',
+    actorEmail: 'owner@college.edu.in',
+    actorRole: 'super_admin_2',
+    section: 'Website Branding',
+    fieldChanged: 'primaryBrandColor',
+    previousValue: '#C8102E',
+    newValue: '#B91C1C',
+    ipAddress: '192.168.1.104',
+  },
+  {
+    id: 'diff-2',
+    timestamp: '2026-09-05T11:20:05Z',
+    actorEmail: 'owner@college.edu.in',
+    actorRole: 'super_admin_2',
+    section: 'Homepage Hero',
+    fieldChanged: 'heroSubheading',
+    previousValue: 'Building compassionate, socially-conscious youth leaders through dedicated community immersion.',
+    newValue: 'Building compassionate, socially-conscious youth leaders through structured community immersion and national service.',
+    ipAddress: '192.168.1.104',
+  },
+  {
+    id: 'diff-3',
+    timestamp: '2026-09-04T16:15:30Z',
+    actorEmail: 'owner@college.edu.in',
+    actorRole: 'super_admin_2',
+    section: 'External Data Sources',
+    fieldChanged: 'src-2.status',
+    previousValue: 'inactive',
+    newValue: 'active',
+    ipAddress: '192.168.1.104',
+  },
+];
+
+export let mockSiteCmsContent: SiteCmsContent = {
+  collegeName: 'Government Model Autonomous College',
+  collegeFullName: 'Government Model Autonomous College & Postgraduate Research Institute',
+  universityAffiliation: 'Affiliated to State University of Technology • Approved by UGC & NAAC Grade A++',
+  unitNumber: 'Unit No. 04 & 05',
+  motto: 'NOT ME BUT YOU',
+  hindiMotto: 'न मे परंतू भवान्',
+  foundedYear: '1969',
+
+  heroBadge: 'NATIONAL SERVICE SCHEME • MINISTRY OF YOUTH AFFAIRS & SPORTS',
+  heroHeading: 'Not Me, But You: Youth in the Service of the Nation',
+  heroSubheading: 'Empowering student volunteers through transformative rural development, public healthcare clinics, environmental conservation, and social equity initiatives.',
+  heroCtaPrimary: 'Enroll as Volunteer',
+  heroCtaSecondary: 'Explore Service Diary',
+  aboutSectionTitle: 'Rooted in Community, Driven by Purpose',
+  aboutSectionDescription: 'Established under the Ministry of Youth Affairs and Sports, our collegiate NSS Unit operates with dual wings (Unit 04 & 05), actively mobilizing 200+ dedicated undergraduate and postgraduate volunteers every academic session.',
+  missionStatement: 'To instill a voluntary spirit of selfless national service and civic duty among collegiate youth, channeling their energy into grassroots societal development, environmental preservation, and egalitarian upliftment.',
+  visionStatement: 'To foster an empathetic, socially conscious generation of student leaders equipped with practical community problem-solving skills, moral integrity, and unshakeable patriotic devotion.',
+  orgDescription: 'The National Service Scheme (NSS) is an Indian government-sponsored public service program conducted by the Ministry of Youth Affairs and Sports of the Government of India. It aims to develop student personality through community service.',
+
+  collegeAddress: 'Higher Education Campus, University Road, Civil Lines, District Center - 462001',
+  officialEmail: 'nss.cell@college.edu.in',
+  officialPhone: '+91 (0755) 255-4433',
+  bloodHelpline: '+91 98765 43210',
+  workingHours: 'Monday – Friday: 9:00 AM – 5:00 PM',
+
+  navLabels: {
+    home: 'Home',
+    about: 'About NSS',
+    events: 'Events',
+    activities: 'Activities',
+    gallery: 'Photo Archive',
+    reports: 'Official Reports',
+    bloodDonor: 'Blood Donors',
+    contact: 'Contact Cell',
+  },
+
+  footerDescription: 'Dedicated to community welfare, disaster relief mobilization, public healthcare, environmental restoration, and youth leadership under the Ministry of Youth Affairs & Sports.',
+  copyrightText: '© 2026 National Service Scheme (NSS) Unit 04 & 05. All Rights Reserved. Govt. Model Autonomous College.',
+  termsText: 'Authorized institutional volunteers and faculty only. All participation governed by State NSS Directorate bylaws.',
+  privacyText: 'Student and donor data strictly safeguarded under institutional data governance regulations.',
+
+  announcements: [
+    {
+      id: 'ann-1',
+      title: 'Volunteer Enrollment for Academic Year 2026–27 is now active. Open to all faculties.',
+      date: 'Sep 05, 2026',
+      isNew: true,
+      link: '/join',
+    },
+    {
+      id: 'ann-2',
+      title: 'Seven-Day Special Rural Immersion Camp selection interview scheduled for next Saturday.',
+      date: 'Aug 29, 2026',
+      isNew: false,
+      link: '/special-camp',
+    },
+  ],
+  faqs: [
+    {
+      question: 'Who is eligible to enroll as an NSS Volunteer?',
+      answer: 'All enrolled undergraduate and postgraduate students of the college across any academic year are eligible to apply for NSS enrollment.',
+    },
+    {
+      question: 'What are the minimum service hours required for certification?',
+      answer: 'Volunteers must complete 120 hours of regular community service per year for two consecutive years (total 240 hours) plus one 7-day Special Village Camp to earn the Official NSS Certificate.',
+    },
+    {
+      question: 'How do I register for campus blood donation drives or walkathons?',
+      answer: 'Simply log in to the Unified NSS Portal with your student account, open the Events section, and click Register. Your participation and attendance will be tracked digitally.',
+    },
+  ],
+
+  branding: {
+    siteTitle: 'NSS Institutional Unit Portal - National Service Scheme',
+    metaDescription: 'Official institutional platform for collegiate NSS Unit 04 & 05, featuring community shramdaan, blood donor registry, event participation, and volunteer administration.',
+    keywords: ['NSS', 'National Service Scheme', 'Volunteer', 'Community Service', 'Blood Donation', 'Youth Leadership'],
+    websiteLogoUrl: '/assets/nss-logo.svg',
+    orgLogoUrl: '/assets/nss-logo.svg',
+    faviconUrl: '/assets/nss-logo.svg',
+    headerLogoUrl: '/assets/nss-logo.svg',
+    footerLogoUrl: '/assets/nss-logo.svg',
+    heroImageUrl: 'https://images.unsplash.com/photo-1544027993-37dbfe43562a?auto=format&fit=crop&w=1600&q=80',
+    heroBackgroundUrl: '',
+    ogShareImageUrl: 'https://images.unsplash.com/photo-1544027993-37dbfe43562a?auto=format&fit=crop&w=1200&q=80',
+    primaryBrandColor: '#C8102E',
+    secondaryBrandColor: '#0B1528',
+    accentColor: '#F97316',
+  },
+
+  externalDataSources: mockExternalDataSources,
+  topPicksIntervalSeconds: 5,
+};
 
 const mockEvents: (EventItem & { collegeId: string; createdAt: string })[] = [
   {
@@ -600,6 +894,18 @@ export class SheetsService {
         case 'AuditLogs':
           result = collegeId ? mockAuditLogs.filter((l) => l.collegeId === collegeId) : mockAuditLogs;
           break;
+        case 'EventRegistrations':
+          result = mockEventRegistrations;
+          break;
+        case 'ExternalDataSources':
+          result = mockExternalDataSources;
+          break;
+        case 'AuditTrailDiffs':
+          result = mockAuditTrailDiffs;
+          break;
+        case 'SiteSettings':
+          result = [mockSiteCmsContent];
+          break;
         default:
           result = [];
       }
@@ -686,6 +992,15 @@ export class SheetsService {
         case 'AuditLogs':
           mockAuditLogs.unshift(record as unknown as AuditLogEntry);
           break;
+        case 'EventRegistrations':
+          mockEventRegistrations.unshift(record as unknown as EventRegistration);
+          break;
+        case 'ExternalDataSources':
+          mockExternalDataSources.push(record as unknown as ExternalDataSource);
+          break;
+        case 'AuditTrailDiffs':
+          mockAuditTrailDiffs.unshift(record as unknown as AuditTrailDiff);
+          break;
       }
       return record as T;
     }
@@ -740,6 +1055,10 @@ export class SheetsService {
           return updateList(mockContactMessages) as T | null;
         case 'Users':
           return updateList(mockUsers) as T | null;
+        case 'EventRegistrations':
+          return updateList(mockEventRegistrations) as T | null;
+        case 'ExternalDataSources':
+          return updateList(mockExternalDataSources) as T | null;
         default:
           return null;
       }
@@ -799,6 +1118,8 @@ export class SheetsService {
         case 'Volunteers': return removeFromList(mockVolunteers);
         case 'ContactMessages': return removeFromList(mockContactMessages);
         case 'Users': return removeFromList(mockUsers);
+        case 'EventRegistrations': return removeFromList(mockEventRegistrations);
+        case 'ExternalDataSources': return removeFromList(mockExternalDataSources);
         default: return false;
       }
     }

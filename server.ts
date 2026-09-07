@@ -18,6 +18,7 @@ import { contactRouter } from './server/routes/contact.js';
 import { uploadsRouter } from './server/routes/uploads.js';
 import { auditRouter } from './server/routes/audit.js';
 import { searchRouter } from './server/routes/search.js';
+import { analyticsRouter } from './server/routes/analytics.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -75,6 +76,7 @@ async function startServer() {
   app.use('/api/uploads', uploadsRouter);
   app.use('/api/audit', auditRouter);
   app.use('/api/search', searchRouter);
+  app.use('/api/analytics', analyticsRouter);
 
   // Global Error Handler for API
   app.use('/api', (err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

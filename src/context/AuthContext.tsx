@@ -2,23 +2,42 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { api, getStoredToken, setStoredToken, getActiveCollegeId, setActiveCollegeId } from '../lib/api';
 import type { User, Role } from '../types';
 
+export interface Pending2FAState {
+  email: string;
+  role: Role;
+  tempToken: string;
+  isSuperAdmin2: boolean;
+  message?: string;
+}
+
 interface AuthContextType {
   user: User | null;
   role: Role;
   token: string | null;
   isAuthenticated: boolean;
+  isCoordinator: boolean;
   isAdmin: boolean;
-  isSuperadmin: boolean;
+  isSuperAdmin1: boolean;
+  isSuperAdmin2: boolean;
+  canAccessAdminPortal: boolean;
   collegeId: string;
   setCollegeId: (id: string) => void;
   login: (credentials: {
     email: string;
-    password?: string;
-    requestAdminAccess?: boolean;
-    adminPasscode?: string;
-    role?: 'member' | 'admin' | 'superadmin';
-    idToken?: string;
-  }) => Promise<{ success: boolean; requiresAdmin2FA?: boolean; message?: string; error?: string }>;
+    password: string;
+  }) => Promise<{
+    success: boolean;
+    requiresAdmin2FA?: boolean;
+    pending2FA?: Pending2FAState;
+    message?: string;
+    error?: string;
+  }>;
+  verify2FA: (data: {
+    email: string;
+    tempToken: string;
+    totpCode: string;
+    masterAuthKey?: string;
+  }) => Promise<{ success: boolean; error?: string }>;
   register: (formData: {
     name: string;
     email: string;
@@ -30,7 +49,7 @@ interface AuthContextType {
     rollNumber?: string;
   }) => Promise<{ success: boolean; error?: string; message?: string }>;
   logout: () => Promise<void>;
-  quickDemoLogin: (role: 'member' | 'admin' | 'superadmin') => Promise<void>;
+  demoSwitch: (role: Role) => Promise<boolean>;
   isLoading: boolean;
   isLoginOpen: boolean;
   openLogin: () => void;
@@ -61,7 +80,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const res = await api.auth.getMe();
           if (res.success && res.data?.user) {
             setUser(res.data.user);
-            if (res.data.user.collegeId && res.data.user.role !== 'superadmin') {
+            if (res.data.user.collegeId && !res.data.user.role.startsWith('super')) {
               setCollegeId(res.data.user.collegeId);
             }
           } else {
@@ -81,24 +100,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     loadUser();
   }, [token]);
 
-  const login = async (credentials: {
-    email: string;
-    password?: string;
-    requestAdminAccess?: boolean;
-    adminPasscode?: string;
-    role?: 'member' | 'admin' | 'superadmin';
-    idToken?: string;
-  }) => {
+  const login = async (credentials: { email: string; password: string }) => {
     setIsLoading(true);
     const res = await api.auth.login(credentials);
     setIsLoading(false);
 
-    // If 2FA challenge requested by backend
-    if (res.requiresAdmin2FA) {
+    // If 2FA challenge is issued for administrative accounts
+    if (res.requiresAdmin2FA && res.data?.tempToken && res.data?.email) {
       return {
         success: false,
         requiresAdmin2FA: true,
-        message: res.message || 'Admin 2FA verification required.',
+        pending2FA: {
+          email: res.data.email,
+          role: res.data.role || 'admin',
+          tempToken: res.data.tempToken,
+          isSuperAdmin2: Boolean(res.data.isSuperAdmin2),
+          message: res.message,
+        },
+        message: res.message || 'Two-factor TOTP authentication required.',
       };
     }
 
@@ -106,14 +125,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setStoredToken(res.data.token);
       setToken(res.data.token);
       setUser(res.data.user);
-      if (res.data.user.collegeId && res.data.user.role !== 'superadmin') {
+      if (res.data.user.collegeId && !res.data.user.role.startsWith('super')) {
         setCollegeId(res.data.user.collegeId);
       }
       return { success: true };
     }
+
     return {
       success: false,
-      error: res.error || 'Login failed. Please check your credentials.',
+      error: res.error || 'Login failed. Please verify your credentials.',
+    };
+  };
+
+  const verify2FA = async (data: {
+    email: string;
+    tempToken: string;
+    totpCode: string;
+    masterAuthKey?: string;
+  }) => {
+    setIsLoading(true);
+    const res = await api.auth.verify2FA(data);
+    setIsLoading(false);
+
+    if (res.success && res.data?.token && res.data?.user) {
+      setStoredToken(res.data.token);
+      setToken(res.data.token);
+      setUser(res.data.user);
+      if (res.data.user.collegeId && !res.data.user.role.startsWith('super')) {
+        setCollegeId(res.data.user.collegeId);
+      }
+      return { success: true };
+    }
+
+    return {
+      success: false,
+      error: res.error || 'Invalid TOTP code or verification failed.',
     };
   };
 
@@ -135,7 +181,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setStoredToken(res.data.token);
       setToken(res.data.token);
       setUser(res.data.user);
-      if (res.data.user.collegeId && res.data.user.role !== 'superadmin') {
+      if (res.data.user.collegeId && !res.data.user.role.startsWith('super')) {
         setCollegeId(res.data.user.collegeId);
       }
       return { success: true, message: res.message };
@@ -157,20 +203,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
   };
 
-  const quickDemoLogin = async (role: 'member' | 'admin' | 'superadmin') => {
-    const email =
-      role === 'superadmin'
-        ? 'superadmin@nss-portal.gov.in'
-        : role === 'admin'
-        ? 'programme.officer@college.edu.in'
-        : 'student@college.edu.in';
-    await login({ email, role, requestAdminAccess: role === 'admin' || role === 'superadmin' });
+  const demoSwitch = async (targetRole: Role): Promise<boolean> => {
+    setIsLoading(true);
+    const res = await api.auth.demoSwitch(targetRole);
+    setIsLoading(false);
+
+    if (res.success && res.data?.token && res.data?.user) {
+      setStoredToken(res.data.token);
+      setToken(res.data.token);
+      setUser(res.data.user);
+      if (res.data.user.collegeId && !res.data.user.role.startsWith('super')) {
+        setCollegeId(res.data.user.collegeId);
+      }
+      return true;
+    }
+    return false;
   };
 
   const role: Role = user ? user.role : 'public';
   const isAuthenticated = Boolean(user && token);
-  const isAdmin = role === 'admin' || role === 'superadmin';
-  const isSuperadmin = role === 'superadmin';
+  const isCoordinator = role === 'coordinator';
+  const isAdmin = role === 'admin' || role === 'super_admin_1' || role === 'superadmin' || role === 'super_admin_2';
+  const isSuperAdmin1 = role === 'super_admin_1' || role === 'superadmin' || role === 'super_admin_2';
+  const isSuperAdmin2 = role === 'super_admin_2';
+  const canAccessAdminPortal = isCoordinator || isAdmin || isSuperAdmin1 || isSuperAdmin2;
 
   return (
     <AuthContext.Provider
@@ -179,14 +235,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         role,
         token,
         isAuthenticated,
+        isCoordinator,
         isAdmin,
-        isSuperadmin,
+        isSuperAdmin1,
+        isSuperAdmin2,
+        canAccessAdminPortal,
         collegeId,
         setCollegeId,
         login,
+        verify2FA,
         register,
         logout,
-        quickDemoLogin,
+        demoSwitch,
         isLoading,
         isLoginOpen,
         openLogin,
