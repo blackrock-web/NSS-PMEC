@@ -1,12 +1,17 @@
 import React, { useState } from 'react';
 import { 
   HeartHandshake, CheckCircle2, ShieldAlert, Award, 
-  FileText, Clock, Users, ArrowRight, Sparkles, Send, RefreshCw 
+  FileText, Clock, Users, ArrowRight, Sparkles, Send, RefreshCw, AlertCircle 
 } from 'lucide-react';
 import { SectionHeading } from '../components/ui/SectionHeading';
 import { SITE_CONFIG } from '../data/config';
+import { api } from '../lib/api';
+import { useTenant } from '../context/TenantContext';
 
 export const JoinNssPage: React.FC = () => {
+  const { config } = useTenant();
+  const activeConfig = config || SITE_CONFIG;
+
   const [formData, setFormData] = useState({
     fullName: '',
     rollNumber: '',
@@ -61,7 +66,7 @@ export const JoinNssPage: React.FC = () => {
     return errs;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const validationErrors = validate();
     if (Object.keys(validationErrors).length > 0) {
@@ -71,10 +76,31 @@ export const JoinNssPage: React.FC = () => {
     setErrors({});
     setSubmitting(true);
 
-    setTimeout(() => {
+    try {
+      const res = await api.volunteers.apply({
+        fullName: formData.fullName,
+        rollNumber: formData.rollNumber,
+        department: formData.department,
+        academicYear: formData.yearOfStudy,
+        email: formData.email,
+        phone: formData.phone,
+        bloodGroup: formData.bloodGroup,
+        skills: formData.areasOfInterest,
+        motivation: formData.motivation,
+        previousExperience: formData.pastExperience,
+        pledgeAccepted: true,
+      });
+
+      if (res.success) {
+        setSubmitted(true);
+      } else {
+        setErrors({ form: res.error || 'Submission failed. Please verify your details.' });
+      }
+    } catch (err: any) {
+      setErrors({ form: err.message || 'An unexpected error occurred while saving application.' });
+    } finally {
       setSubmitting(false);
-      setSubmitted(true);
-    }, 1000);
+    }
   };
 
   const handleReset = () => {
@@ -246,6 +272,13 @@ export const JoinNssPage: React.FC = () => {
                       Academic Year 2026–27 • All fields marked with an asterisk (*) are mandatory.
                     </p>
                   </div>
+
+                  {errors.form && (
+                    <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                      <span>{errors.form}</span>
+                    </div>
+                  )}
 
                   {/* Name & Roll Number */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

@@ -1,14 +1,30 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Image as ImageIcon, Filter, MapPin, Calendar, Tag } from 'lucide-react';
 import { SectionHeading } from '../components/ui/SectionHeading';
 import { Lightbox } from '../components/ui/Lightbox';
 import { GALLERY_DATA } from '../data/gallery';
+import { api } from '../lib/api';
 import { GalleryPhoto } from '../types';
 
 export const GalleryPage: React.FC = () => {
+  const [photos, setPhotos] = useState<GalleryPhoto[]>(GALLERY_DATA);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [selectedPhoto, setSelectedPhoto] = useState<GalleryPhoto | null>(null);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState<number>(0);
+
+  useEffect(() => {
+    async function loadGallery() {
+      try {
+        const res = await api.gallery.list();
+        if (res.success && res.data && res.data.length > 0) {
+          setPhotos(res.data);
+        }
+      } catch (e) {
+        console.error('Failed to load dynamic gallery:', e);
+      }
+    }
+    loadGallery();
+  }, []);
 
   const categories = [
     'All',
@@ -21,11 +37,11 @@ export const GalleryPage: React.FC = () => {
   ];
 
   const filteredPhotos = useMemo(() => {
-    if (selectedCategory === 'All') return GALLERY_DATA;
-    return GALLERY_DATA.filter((p) =>
+    if (selectedCategory === 'All') return photos;
+    return photos.filter((p) =>
       p.category.toLowerCase().includes(selectedCategory.toLowerCase())
     );
-  }, [selectedCategory]);
+  }, [photos, selectedCategory]);
 
   const handleOpenPhoto = (photo: GalleryPhoto) => {
     const idx = filteredPhotos.findIndex((p) => p.id === photo.id);

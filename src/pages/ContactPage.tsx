@@ -1,12 +1,17 @@
 import React, { useState } from 'react';
 import { 
   MapPin, Phone, Mail, Clock, HeartPulse, Send, 
-  CheckCircle2, ShieldCheck, HelpCircle, Building2 
+  CheckCircle2, ShieldCheck, HelpCircle, Building2, AlertCircle 
 } from 'lucide-react';
 import { SectionHeading } from '../components/ui/SectionHeading';
 import { SITE_CONFIG } from '../data/config';
+import { api } from '../lib/api';
+import { useTenant } from '../context/TenantContext';
 
 export const ContactPage: React.FC = () => {
+  const { config } = useTenant();
+  const activeConfig = config || SITE_CONFIG;
+
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -31,7 +36,7 @@ export const ContactPage: React.FC = () => {
     return errs;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const valErrors = validate();
     if (Object.keys(valErrors).length > 0) {
@@ -41,10 +46,18 @@ export const ContactPage: React.FC = () => {
     setErrors({});
     setSubmitting(true);
 
-    setTimeout(() => {
+    try {
+      const res = await api.contact.submit(formData);
+      if (res.success) {
+        setSubmitted(true);
+      } else {
+        setErrors({ form: res.error || 'Failed to submit enquiry' });
+      }
+    } catch (err: any) {
+      setErrors({ form: err.message || 'Error transmitting message' });
+    } finally {
       setSubmitting(false);
-      setSubmitted(true);
-    }, 800);
+    }
   };
 
   return (

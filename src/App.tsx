@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Navbar } from './components/layout/Navbar';
 import { Footer } from './components/layout/Footer';
 import { GlobalSearchModal } from './components/layout/GlobalSearchModal';
+import { LoginModal } from './components/auth/LoginModal';
+import { TenantProvider, useTenant } from './context/TenantContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 
 // Pages
 import { HomePage } from './pages/HomePage';
@@ -16,15 +19,19 @@ import { ReportsPage } from './pages/ReportsPage';
 import { JoinNssPage } from './pages/JoinNssPage';
 import { ContactPage } from './pages/ContactPage';
 import { TeamPage } from './pages/TeamPage';
+import { AdminDashboard } from './pages/AdminDashboard';
 
 import { ArrowUp, HeartPulse } from 'lucide-react';
 import { SITE_CONFIG } from './data/config';
 
-export default function App() {
+function AppContent() {
   const [currentPath, setCurrentPath] = useState<string>('/');
   const [currentEventSlug, setCurrentEventSlug] = useState<string | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
   const [showScrollTop, setShowScrollTop] = useState<boolean>(false);
+  const { config } = useTenant();
+
+  const activeConfig = config || SITE_CONFIG;
 
   // Monitor scroll for back to top button
   useEffect(() => {
@@ -37,7 +44,6 @@ export default function App() {
 
   // Sync with browser history and handle route changes
   const handleNavigate = (path: string) => {
-    // Check if it's an event detail link like /events/slug
     if (path.startsWith('/events/')) {
       const slug = path.replace('/events/', '');
       setCurrentEventSlug(slug);
@@ -105,6 +111,8 @@ export default function App() {
         return <JoinNssPage />;
       case '/contact':
         return <ContactPage />;
+      case '/admin':
+        return <AdminDashboard />;
       default:
         return <HomePage onNavigate={handleNavigate} onViewEvent={handleViewEvent} />;
     }
@@ -117,16 +125,16 @@ export default function App() {
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="font-semibold text-white">NSS Units 04 & 05</span>
+            <span className="font-semibold text-white">{activeConfig.unitNumber}</span>
             <span className="hidden sm:inline text-slate-400">•</span>
-            <span className="hidden sm:inline text-slate-400">{SITE_CONFIG.collegeFullName}</span>
+            <span className="hidden sm:inline text-slate-400">{activeConfig.collegeFullName}</span>
           </div>
 
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-1 text-[#FCA5A5]">
               <HeartPulse className="w-3.5 h-3.5 text-[#E63946]" />
               <span className="font-bold">24/7 Blood Donor Helpline:</span>
-              <span className="text-white font-mono">{SITE_CONFIG.bloodHelpline}</span>
+              <span className="text-white font-mono">{activeConfig.bloodHelpline}</span>
             </div>
             <button
               onClick={() => setIsSearchOpen(true)}
@@ -161,6 +169,9 @@ export default function App() {
         onNavigate={handleNavigate}
       />
 
+      {/* Authentication Modal */}
+      <LoginModal onLoginSuccess={() => handleNavigate('/admin')} />
+
       {/* Floating Back to Top Button */}
       {showScrollTop && (
         <button
@@ -172,5 +183,15 @@ export default function App() {
         </button>
       )}
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <TenantProvider>
+        <AppContent />
+      </TenantProvider>
+    </AuthProvider>
   );
 }

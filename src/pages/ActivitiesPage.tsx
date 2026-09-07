@@ -1,16 +1,32 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Search, Sparkles, Filter, CheckCircle2 } from 'lucide-react';
 import { SectionHeading } from '../components/ui/SectionHeading';
 import { ActivityCard } from '../components/activities/ActivityCard';
 import { ActivityModal } from '../components/activities/ActivityModal';
 import { ACTIVITIES_DATA } from '../data/activities';
+import { api } from '../lib/api';
 import { Activity } from '../types';
 
 export const ActivitiesPage: React.FC = () => {
+  const [activities, setActivities] = useState<Activity[]>(ACTIVITIES_DATA);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
   const [displayCount, setDisplayCount] = useState<number>(6);
+
+  useEffect(() => {
+    async function loadActivities() {
+      try {
+        const res = await api.activities.list();
+        if (res.success && res.data && res.data.length > 0) {
+          setActivities(res.data);
+        }
+      } catch (e) {
+        console.error('Failed to load dynamic activities:', e);
+      }
+    }
+    loadActivities();
+  }, []);
 
   const categories = [
     'All',
@@ -23,7 +39,7 @@ export const ActivitiesPage: React.FC = () => {
   ];
 
   const filteredActivities = useMemo(() => {
-    return ACTIVITIES_DATA.filter((act) => {
+    return activities.filter((act) => {
       const matchCat =
         selectedCategory === 'All' ||
         act.category.toLowerCase().includes(selectedCategory.toLowerCase());
@@ -34,7 +50,7 @@ export const ActivitiesPage: React.FC = () => {
         act.location.toLowerCase().includes(searchQuery.toLowerCase());
       return matchCat && matchQuery;
     });
-  }, [selectedCategory, searchQuery]);
+  }, [activities, selectedCategory, searchQuery]);
 
   const visibleActivities = filteredActivities.slice(0, displayCount);
 

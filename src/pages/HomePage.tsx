@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ArrowRight, HeartHandshake, Calendar, ChevronDown, 
   Trees, HeartPulse, GraduationCap, Building2, ShieldAlert, Flag,
@@ -17,7 +17,9 @@ import { EVENTS_DATA } from '../data/events';
 import { GALLERY_DATA } from '../data/gallery';
 import { ACHIEVEMENTS_DATA } from '../data/achievements';
 import { SPECIAL_CAMP_CONFIG } from '../data/specialCamp';
-import { Activity, GalleryPhoto } from '../types';
+import { Activity, GalleryPhoto, EventItem } from '../types';
+import { useTenant } from '../context/TenantContext';
+import { api } from '../lib/api';
 
 interface HomePageProps {
   onNavigate: (path: string) => void;
@@ -25,16 +27,47 @@ interface HomePageProps {
 }
 
 export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onViewEvent }) => {
+  const { config } = useTenant();
+  const activeConfig = config || SITE_CONFIG;
+
   const [selectedPhoto, setSelectedPhoto] = useState<GalleryPhoto | null>(null);
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
 
+  const [galleryPhotos, setGalleryPhotos] = useState<GalleryPhoto[]>(GALLERY_DATA);
+  const [eventsList, setEventsList] = useState<EventItem[]>(EVENTS_DATA);
+  const [activitiesList, setActivitiesList] = useState<Activity[]>(ACTIVITIES_DATA);
+
+  useEffect(() => {
+    async function loadDynamicHomeData() {
+      try {
+        const [evts, acts, gals] = await Promise.all([
+          api.events.list().catch(() => ({ success: false, data: [] })),
+          api.activities.list().catch(() => ({ success: false, data: [] })),
+          api.gallery.list().catch(() => ({ success: false, data: [] })),
+        ]);
+        if (evts.success && evts.data && evts.data.length > 0) {
+          setEventsList(evts.data);
+        }
+        if (acts.success && acts.data && acts.data.length > 0) {
+          setActivitiesList(acts.data);
+        }
+        if (gals.success && gals.data && gals.data.length > 0) {
+          setGalleryPhotos(gals.data);
+        }
+      } catch (e) {
+        console.error('Failed to load dynamic homepage content:', e);
+      }
+    }
+    loadDynamicHomeData();
+  }, []);
+
   // Gallery preview slice (first 6 photos)
-  const previewPhotos = GALLERY_DATA.slice(0, 6);
+  const previewPhotos = galleryPhotos.slice(0, 6);
   // Upcoming events (first 3)
-  const upcomingEvents = EVENTS_DATA.filter(e => e.status === 'upcoming').slice(0, 3);
+  const upcomingEvents = eventsList.filter(e => e.status === 'upcoming').slice(0, 3);
   // Recent activities (first 3)
-  const recentActivities = ACTIVITIES_DATA.slice(0, 3);
+  const recentActivities = activitiesList.slice(0, 3);
 
   const handleOpenLightbox = (photo: GalleryPhoto, index: number) => {
     setSelectedPhoto(photo);

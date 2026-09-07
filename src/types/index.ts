@@ -111,19 +111,20 @@ export interface ReportItem {
 
 export interface VolunteerFormData {
   fullName: string;
-  dob: string;
-  gender: 'Male' | 'Female' | 'Other' | '';
+  dob?: string;
+  gender?: 'Male' | 'Female' | 'Other' | string;
   phone: string;
   email: string;
   rollNumber: string;
   department: string;
-  academicYear: '1st Year' | '2nd Year' | '3rd Year' | '4th Year' | '';
-  semester: string;
-  bloodGroup: 'A+' | 'A-' | 'B+' | 'B-' | 'O+' | 'O-' | 'AB+' | 'AB-' | '';
-  previousExperience: string;
+  academicYear: string;
+  semester?: string;
+  bloodGroup: string;
+  previousExperience?: string;
   skills: string[];
   motivation: string;
-  agreeToPledge: boolean;
+  agreeToPledge?: boolean;
+  pledgeAccepted?: boolean;
 }
 
 export interface ContactFormData {
@@ -133,3 +134,143 @@ export interface ContactFormData {
   category: 'General Inquiry' | 'Volunteer Enrollment' | 'Event Collaboration' | 'Report Verification';
   message: string;
 }
+
+// ----------------------------------------------------
+// SaaS, Multi-tenant, and Auth Types
+// ----------------------------------------------------
+
+export type Role = 'public' | 'admin' | 'superadmin';
+
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  role: Role;
+  collegeId: string;
+  collegeName?: string;
+  avatarUrl?: string;
+  createdAt: string;
+  isActive: boolean;
+}
+
+export interface SiteAnnouncement {
+  id: string;
+  title: string;
+  date: string;
+  isNew: boolean;
+  link: string;
+}
+
+export type Announcement = SiteAnnouncement;
+
+export interface ImpactStatistic {
+  label: string;
+  value: number;
+  suffix: string;
+  note: string;
+}
+
+export type ImpactStat = ImpactStatistic;
+
+export interface TenantConfig {
+  id: string;
+  collegeName: string;
+  collegeFullName: string;
+  universityAffiliation: string;
+  unitNumber: string;
+  motto: string;
+  hindiMotto: string;
+  foundedYear: string;
+  collegeAddress: string;
+  programmeOfficerName: string;
+  programmeOfficerTitle: string;
+  email: string;
+  phone: string;
+  officialPhone: string;
+  bloodHelpline: string;
+  officeLocation: string;
+  address: string;
+  officeHours: string;
+  workingHours: string;
+  socialLinks: {
+    instagram: string;
+    twitter: string;
+    youtube: string;
+    linkedin: string;
+    collegeWebsite: string;
+  };
+  impactStats: ImpactStatistic[];
+  announcements: SiteAnnouncement[];
+  driveFolderId?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Session {
+  token: string;
+  user: User;
+  expiresAt: number;
+}
+
+export interface ApiResponse<T = unknown> {
+  success: boolean;
+  data?: T;
+  message?: string;
+  error?: string;
+  total?: number;
+  page?: number;
+  limit?: number;
+}
+
+export type ApplicationStatus = 'pending' | 'approved' | 'rejected';
+
+export interface VolunteerApplication extends VolunteerFormData {
+  id: string;
+  submittedAt: string;
+  collegeId: string;
+  status: ApplicationStatus;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  reviewNotes?: string;
+}
+
+export type ContactMessageStatus = 'unread' | 'read' | 'replied';
+
+export interface ContactMessageRecord extends ContactFormData {
+  id: string;
+  submittedAt: string;
+  collegeId: string;
+  status: ContactMessageStatus;
+  replyNotes?: string;
+  repliedAt?: string;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  timestamp: string;
+  actorEmail: string;
+  actorRole: Role;
+  collegeId: string;
+  action: string;
+  domain: 'events' | 'activities' | 'volunteers' | 'gallery' | 'reports' | 'team' | 'settings' | 'auth' | 'system';
+  details: string;
+  ipAddress?: string;
+}
+
+export interface StorageQuota {
+  usedBytes: number;
+  maxBytes: number;
+  fileCount: number;
+  driveFolderUrl?: string;
+}
+
+export interface GlobalSearchResult {
+  id: string;
+  title: string;
+  category: string;
+  type: 'event' | 'activity' | 'achievement' | 'gallery' | 'report' | 'team';
+  link: string;
+  snippet: string;
+  date?: string;
+}
+

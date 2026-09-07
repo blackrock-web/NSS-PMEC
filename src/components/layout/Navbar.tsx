@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, X, Search, HeartHandshake, ChevronRight, Phone, Mail } from 'lucide-react';
+import { Menu, X, Search, HeartHandshake, ChevronRight, Phone, Mail, Shield, User, LogIn } from 'lucide-react';
 import { NssLogo } from '../common/NssLogo';
 import { SITE_CONFIG } from '../../data/config';
+import { useAuth } from '../../context/AuthContext';
+import { useTenant } from '../../context/TenantContext';
 
 interface NavbarProps {
   currentPath: string;
@@ -16,6 +18,10 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { user, isAuthenticated, openLogin } = useAuth();
+  const { config } = useTenant();
+
+  const activeConfig = config || SITE_CONFIG;
 
   useEffect(() => {
     const handleScroll = () => {
@@ -127,7 +133,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
 
           {/* Action CTAs */}
-          <div className="hidden lg:flex items-center gap-4">
+          <div className="hidden lg:flex items-center gap-3">
             <button
               onClick={onOpenSearch}
               className="p-2 text-slate-600 hover:text-[#0B1F3A] hover:bg-slate-100 rounded-sm transition-colors flex items-center gap-1.5 text-xs font-semibold"
@@ -138,9 +144,33 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span className="text-slate-400 border border-[#E5E7EB] text-[10px] px-1 py-0.5 rounded-xs font-mono">⌘K</span>
             </button>
 
+            {isAuthenticated && user ? (
+              <button
+                onClick={() => handleNavClick('/admin')}
+                className={`px-3 py-2 rounded-sm text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 border ${
+                  currentPath === '/admin'
+                    ? 'bg-[#C8102E] text-white border-[#C8102E]'
+                    : 'bg-[#0B1528] text-white border-[#0B1528] hover:bg-[#1E3A8A]'
+                }`}
+                title={`Signed in as ${user.email}`}
+              >
+                <Shield className="w-3.5 h-3.5 text-amber-400" />
+                <span>Admin Portal</span>
+              </button>
+            ) : (
+              <button
+                onClick={openLogin}
+                className="px-3 py-2 border border-gray-300 hover:border-[#0B1528] text-[#0B1528] hover:bg-gray-50 rounded-sm text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5"
+                title="Programme Officer & Cell Login"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span>PO Login</span>
+              </button>
+            )}
+
             <button
               onClick={() => handleNavClick('/join-nss')}
-              className="bg-[#0B1F3A] text-white px-6 py-2.5 rounded-sm text-xs font-bold uppercase tracking-widest hover:bg-[#E63946] shadow-sm hover:shadow transition-all flex items-center gap-2"
+              className="bg-[#C8102E] text-white px-5 py-2.5 rounded-sm text-xs font-bold uppercase tracking-widest hover:bg-[#9B0D22] shadow-sm hover:shadow transition-all flex items-center gap-2"
             >
               <HeartHandshake className="w-4 h-4" />
               <span>Join NSS</span>
@@ -212,17 +242,38 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             {/* Mobile Footer CTA */}
             <div className="pt-6 border-t border-slate-100 mt-6 space-y-3">
+              {isAuthenticated && user ? (
+                <button
+                  onClick={() => handleNavClick('/admin')}
+                  className="w-full py-2.5 bg-[#0B1528] text-white text-xs font-bold uppercase tracking-wider rounded-sm shadow flex items-center justify-center gap-2 border border-slate-700"
+                >
+                  <Shield className="w-4 h-4 text-amber-400" />
+                  <span>Open Admin Portal</span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    openLogin();
+                  }}
+                  className="w-full py-2.5 border border-slate-300 text-[#0B1528] text-xs font-bold uppercase tracking-wider rounded-sm flex items-center justify-center gap-2 hover:bg-slate-50"
+                >
+                  <LogIn className="w-4 h-4" />
+                  <span>Programme Officer Login</span>
+                </button>
+              )}
+
               <button
                 onClick={() => handleNavClick('/join-nss')}
-                className="w-full py-3 bg-[#E63946] hover:bg-[#C92A37] text-white text-sm font-bold uppercase tracking-wider rounded-lg shadow flex items-center justify-center gap-2"
+                className="w-full py-3 bg-[#C8102E] hover:bg-[#9B0D22] text-white text-sm font-bold uppercase tracking-wider rounded-sm shadow flex items-center justify-center gap-2"
               >
                 <HeartHandshake className="w-4 h-4" />
                 <span>Join NSS Volunteers</span>
               </button>
               <div className="text-center text-xs text-slate-500">
                 <span>Official Helpline: </span>
-                <a href={`tel:${SITE_CONFIG.officialPhone}`} className="text-[#0B1F3A] font-semibold underline">
-                  {SITE_CONFIG.officialPhone}
+                <a href={`tel:${activeConfig.officialPhone || activeConfig.phone}`} className="text-[#0B1528] font-semibold underline">
+                  {activeConfig.officialPhone || activeConfig.phone}
                 </a>
               </div>
             </div>

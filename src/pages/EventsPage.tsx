@@ -1,8 +1,10 @@
-import React, { useState, useMemo } from 'react';
-import { Calendar, Search, Filter, Clock, MapPin, ArrowRight, CheckCircle2 } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Calendar, Search, Filter, Clock, MapPin, ArrowRight, CheckCircle2, Loader2 } from 'lucide-react';
 import { SectionHeading } from '../components/ui/SectionHeading';
 import { EventCard } from '../components/events/EventCard';
 import { EVENTS_DATA } from '../data/events';
+import { api } from '../lib/api';
+import type { EventItem } from '../types';
 
 interface EventsPageProps {
   onViewEvent: (slug: string) => void;
@@ -10,9 +12,25 @@ interface EventsPageProps {
 }
 
 export const EventsPage: React.FC<EventsPageProps> = ({ onViewEvent, onNavigate }) => {
+  const [events, setEvents] = useState<EventItem[]>(EVENTS_DATA);
+  const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'upcoming' | 'past' | 'all'>('upcoming');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState<string>('');
+
+  useEffect(() => {
+    async function loadEvents() {
+      try {
+        const res = await api.events.list();
+        if (res.success && res.data && res.data.length > 0) {
+          setEvents(res.data);
+        }
+      } catch (e) {
+        console.error('Failed to load dynamic events:', e);
+      }
+    }
+    loadEvents();
+  }, []);
 
   const categories = [
     'All',
@@ -23,7 +41,7 @@ export const EventsPage: React.FC<EventsPageProps> = ({ onViewEvent, onNavigate 
   ];
 
   const filteredEvents = useMemo(() => {
-    return EVENTS_DATA.filter((evt) => {
+    return events.filter((evt) => {
       const matchTab = activeTab === 'all' || evt.status === activeTab;
       const matchCat =
         selectedCategory === 'All' ||
@@ -35,7 +53,7 @@ export const EventsPage: React.FC<EventsPageProps> = ({ onViewEvent, onNavigate 
         evt.location.toLowerCase().includes(searchQuery.toLowerCase());
       return matchTab && matchCat && matchQuery;
     });
-  }, [activeTab, selectedCategory, searchQuery]);
+  }, [events, activeTab, selectedCategory, searchQuery]);
 
   return (
     <div className="w-full bg-[#F7F8FA] min-h-screen">

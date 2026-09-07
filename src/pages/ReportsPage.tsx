@@ -1,15 +1,31 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { FileText, Download, Filter, Calendar, FileCheck, ShieldCheck, Eye, Search } from 'lucide-react';
 import { SectionHeading } from '../components/ui/SectionHeading';
 import { ReportDownloadModal } from '../components/ui/ReportDownloadModal';
 import { REPORTS_DATA } from '../data/reports';
+import { api } from '../lib/api';
 import { ReportItem } from '../types';
 
 export const ReportsPage: React.FC = () => {
+  const [reports, setReports] = useState<ReportItem[]>(REPORTS_DATA);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [selectedYear, setSelectedYear] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [activeReportForModal, setActiveReportForModal] = useState<ReportItem | null>(null);
+
+  useEffect(() => {
+    async function loadReports() {
+      try {
+        const res = await api.reports.list();
+        if (res.success && res.data && res.data.length > 0) {
+          setReports(res.data);
+        }
+      } catch (e) {
+        console.error('Failed to load dynamic reports:', e);
+      }
+    }
+    loadReports();
+  }, []);
 
   const categories = [
     'All',
@@ -23,7 +39,7 @@ export const ReportsPage: React.FC = () => {
   const years = ['All', '2025–26', '2024–25', '2023–24'];
 
   const filteredReports = useMemo(() => {
-    return REPORTS_DATA.filter((rep) => {
+    return reports.filter((rep) => {
       const matchCat =
         selectedCategory === 'All' ||
         rep.category.toLowerCase().includes(selectedCategory.toLowerCase());
@@ -35,7 +51,7 @@ export const ReportsPage: React.FC = () => {
         rep.preparedBy.toLowerCase().includes(searchQuery.toLowerCase());
       return matchCat && matchYear && matchSearch;
     });
-  }, [selectedCategory, selectedYear, searchQuery]);
+  }, [reports, selectedCategory, selectedYear, searchQuery]);
 
   return (
     <div className="w-full bg-[#F7F8FA] min-h-screen pb-20">
