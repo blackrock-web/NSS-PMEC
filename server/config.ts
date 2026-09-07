@@ -8,6 +8,7 @@ export const SERVER_CONFIG = {
   jwtSecret: process.env.JWT_SECRET || 'nss_dev_jwt_secret_change_in_production_32chars!',
   sessionSecret: process.env.SESSION_SECRET || 'nss_session_secret_change_in_production!',
   defaultCollegeId: process.env.DEFAULT_COLLEGE_ID || 'unit-04-05',
+  adminVerificationCode: process.env.ADMIN_VERIFICATION_CODE || 'NSS-7749-SECURE',
   
   // Google Cloud Service Account & Workspace Integration
   google: {

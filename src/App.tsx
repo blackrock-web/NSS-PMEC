@@ -20,8 +20,9 @@ import { JoinNssPage } from './pages/JoinNssPage';
 import { ContactPage } from './pages/ContactPage';
 import { TeamPage } from './pages/TeamPage';
 import { AdminDashboard } from './pages/AdminDashboard';
+import { AuthPage } from './pages/AuthPage';
 
-import { ArrowUp, HeartPulse } from 'lucide-react';
+import { ArrowUp } from 'lucide-react';
 import { SITE_CONFIG } from './data/config';
 
 function AppContent() {
@@ -111,6 +112,8 @@ function AppContent() {
         return <JoinNssPage />;
       case '/contact':
         return <ContactPage />;
+      case '/auth':
+        return <AuthPage onNavigate={handleNavigate} />;
       case '/admin':
         return <AdminDashboard />;
       default:
@@ -120,34 +123,7 @@ function AppContent() {
 
   return (
     <div className="flex flex-col min-h-screen bg-[#F7F8FA] text-slate-900 selection:bg-[#E63946] selection:text-white font-sans antialiased">
-      {/* Global Top Micro Notification / Blood Helpline Bar */}
-      <div className="bg-[#071526] text-slate-300 text-[11px] py-1.5 px-4 border-b border-slate-800">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="font-semibold text-white">{activeConfig.unitNumber}</span>
-            <span className="hidden sm:inline text-slate-400">•</span>
-            <span className="hidden sm:inline text-slate-400">{activeConfig.collegeFullName}</span>
-          </div>
-
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1 text-[#FCA5A5]">
-              <HeartPulse className="w-3.5 h-3.5 text-[#E63946]" />
-              <span className="font-bold">24/7 Blood Donor Helpline:</span>
-              <span className="text-white font-mono">{activeConfig.bloodHelpline}</span>
-            </div>
-            <button
-              onClick={() => setIsSearchOpen(true)}
-              className="hidden md:flex items-center gap-1.5 text-slate-400 hover:text-white transition-colors text-[10px] bg-white/10 px-2 py-0.5 rounded border border-white/10"
-            >
-              <span>Search site</span>
-              <kbd className="font-mono bg-black/40 px-1 rounded text-[9px]">⌘K</kbd>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Primary Sticky Navigation */}
+      {/* Primary Sticky Unified Header */}
       <Navbar
         currentPath={currentPath}
         onNavigate={handleNavigate}

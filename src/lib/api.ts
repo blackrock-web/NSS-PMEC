@@ -86,9 +86,51 @@ async function request<T>(
 
 export const api = {
   auth: {
-    login: (body: { email: string; password?: string; role?: 'admin' | 'superadmin'; idToken?: string }) =>
-      request<{ token: string; user: User }>('/auth/login', {
+    login: (body: {
+      email: string;
+      password?: string;
+      requestAdminAccess?: boolean;
+      adminPasscode?: string;
+      role?: 'member' | 'admin' | 'superadmin';
+      idToken?: string;
+    }) =>
+      request<{ token?: string; user?: User; requiresAdmin2FA?: boolean }>('/auth/login', {
         method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    register: (body: {
+      name: string;
+      email: string;
+      password: string;
+      confirmPassword: string;
+      department?: string;
+      academicYear?: string;
+      phone?: string;
+      rollNumber?: string;
+    }) =>
+      request<{ token: string; user: User }>('/auth/register', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    forgotPassword: (email: string) =>
+      request<{ email?: string; demoCode?: string }>('/auth/forgot-password', {
+        method: 'POST',
+        body: JSON.stringify({ email }),
+      }),
+    resetPassword: (body: {
+      email: string;
+      code: string;
+      newPassword: string;
+      confirmPassword: string;
+    }) =>
+      request('/auth/reset-password', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    getUsers: () => request<User[]>('/auth/users'),
+    updateUserRole: (id: string, body: { role?: 'member' | 'admin' | 'superadmin'; isActive?: boolean }) =>
+      request<User>(`/auth/users/${id}/role`, {
+        method: 'PUT',
         body: JSON.stringify(body),
       }),
     getMe: () => request<{ user: User }>('/auth/me'),

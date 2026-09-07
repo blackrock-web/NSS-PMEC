@@ -78,15 +78,29 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onNavigateTab }) => {
 
         <div className="flex flex-wrap items-center gap-2.5">
           <button
+            onClick={() => onNavigateTab('users')}
+            className="inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-300 text-slate-700 text-xs font-bold tracking-wider uppercase hover:bg-slate-50 transition-colors rounded-sm shadow-2xs"
+          >
+            <Users size={14} className="text-blue-600" />
+            <span>User Management</span>
+          </button>
+          <button
+            onClick={() => onNavigateTab('analytics')}
+            className="inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-300 text-slate-700 text-xs font-bold tracking-wider uppercase hover:bg-slate-50 transition-colors rounded-sm shadow-2xs"
+          >
+            <Sparkles size={14} className="text-purple-600" />
+            <span>Analytics & Impact</span>
+          </button>
+          <button
             onClick={() => onNavigateTab('volunteers')}
-            className="inline-flex items-center gap-2 px-3.5 py-2 bg-[#C8102E] text-white text-xs font-bold tracking-wider uppercase hover:bg-[#9B0D22] transition-colors"
+            className="inline-flex items-center gap-2 px-3.5 py-2 bg-[#C8102E] text-white text-xs font-bold tracking-wider uppercase hover:bg-[#9B0D22] transition-colors rounded-sm"
           >
             <Users size={14} />
             <span>Review Queue ({pendingVolunteers.length})</span>
           </button>
           <button
             onClick={() => onNavigateTab('events')}
-            className="inline-flex items-center gap-2 px-3.5 py-2 bg-[#0B1528] text-white text-xs font-bold tracking-wider uppercase hover:bg-[#1E3A8A] transition-colors"
+            className="inline-flex items-center gap-2 px-3.5 py-2 bg-[#0B1528] text-white text-xs font-bold tracking-wider uppercase hover:bg-[#1E3A8A] transition-colors rounded-sm"
           >
             <Plus size={14} />
             <span>New Event Drive</span>

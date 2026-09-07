@@ -11,9 +11,26 @@ interface AuthContextType {
   isSuperadmin: boolean;
   collegeId: string;
   setCollegeId: (id: string) => void;
-  login: (credentials: { email: string; password?: string; role?: 'admin' | 'superadmin'; idToken?: string }) => Promise<{ success: boolean; error?: string }>;
+  login: (credentials: {
+    email: string;
+    password?: string;
+    requestAdminAccess?: boolean;
+    adminPasscode?: string;
+    role?: 'member' | 'admin' | 'superadmin';
+    idToken?: string;
+  }) => Promise<{ success: boolean; requiresAdmin2FA?: boolean; message?: string; error?: string }>;
+  register: (formData: {
+    name: string;
+    email: string;
+    password: string;
+    confirmPassword: string;
+    department?: string;
+    academicYear?: string;
+    phone?: string;
+    rollNumber?: string;
+  }) => Promise<{ success: boolean; error?: string; message?: string }>;
   logout: () => Promise<void>;
-  quickDemoLogin: (role: 'admin' | 'superadmin') => Promise<void>;
+  quickDemoLogin: (role: 'member' | 'admin' | 'superadmin') => Promise<void>;
   isLoading: boolean;
   isLoginOpen: boolean;
   openLogin: () => void;
@@ -67,14 +84,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (credentials: {
     email: string;
     password?: string;
-    role?: 'admin' | 'superadmin';
+    requestAdminAccess?: boolean;
+    adminPasscode?: string;
+    role?: 'member' | 'admin' | 'superadmin';
     idToken?: string;
   }) => {
     setIsLoading(true);
     const res = await api.auth.login(credentials);
     setIsLoading(false);
 
-    if (res.success && res.data) {
+    // If 2FA challenge requested by backend
+    if (res.requiresAdmin2FA) {
+      return {
+        success: false,
+        requiresAdmin2FA: true,
+        message: res.message || 'Admin 2FA verification required.',
+      };
+    }
+
+    if (res.success && res.data?.token && res.data?.user) {
       setStoredToken(res.data.token);
       setToken(res.data.token);
       setUser(res.data.user);
@@ -83,7 +111,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       return { success: true };
     }
-    return { success: false, error: res.error || 'Login failed' };
+    return {
+      success: false,
+      error: res.error || 'Login failed. Please check your credentials.',
+    };
+  };
+
+  const register = async (formData: {
+    name: string;
+    email: string;
+    password: string;
+    confirmPassword: string;
+    department?: string;
+    academicYear?: string;
+    phone?: string;
+    rollNumber?: string;
+  }) => {
+    setIsLoading(true);
+    const res = await api.auth.register(formData);
+    setIsLoading(false);
+
+    if (res.success && res.data?.token && res.data?.user) {
+      setStoredToken(res.data.token);
+      setToken(res.data.token);
+      setUser(res.data.user);
+      if (res.data.user.collegeId && res.data.user.role !== 'superadmin') {
+        setCollegeId(res.data.user.collegeId);
+      }
+      return { success: true, message: res.message };
+    }
+    return {
+      success: false,
+      error: res.error || 'Registration failed. Please review your input.',
+    };
   };
 
   const logout = async () => {
@@ -97,9 +157,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
   };
 
-  const quickDemoLogin = async (role: 'admin' | 'superadmin') => {
-    const email = role === 'superadmin' ? 'superadmin@nss-portal.gov.in' : 'programme.officer@college.edu.in';
-    await login({ email, role });
+  const quickDemoLogin = async (role: 'member' | 'admin' | 'superadmin') => {
+    const email =
+      role === 'superadmin'
+        ? 'superadmin@nss-portal.gov.in'
+        : role === 'admin'
+        ? 'programme.officer@college.edu.in'
+        : 'student@college.edu.in';
+    await login({ email, role, requestAdminAccess: role === 'admin' || role === 'superadmin' });
   };
 
   const role: Role = user ? user.role : 'public';
@@ -119,6 +184,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         collegeId,
         setCollegeId,
         login,
+        register,
         logout,
         quickDemoLogin,
         isLoading,
