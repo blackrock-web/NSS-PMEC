@@ -11,6 +11,7 @@ import { EventCard } from '../components/events/EventCard';
 import { ActivityCard } from '../components/activities/ActivityCard';
 import { Lightbox } from '../components/ui/Lightbox';
 import { ActivityModal } from '../components/activities/ActivityModal';
+import { GalleryGlimpse } from '../components/home/GalleryGlimpse';
 import { SITE_CONFIG } from '../data/config';
 import { ACTIVITIES_DATA } from '../data/activities';
 import { EVENTS_DATA } from '../data/events';
@@ -720,6 +721,15 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, onViewEvent }) =
               </button>
             }
           />
+
+          {/* Interactive Gallery Glimpse & Top Picks Carousel */}
+          <div className="mb-10">
+            <GalleryGlimpse
+              photos={galleryPhotos}
+              onOpenLightbox={(photo, idx) => handleOpenLightbox(photo, idx)}
+              onExploreMore={() => onNavigate('/gallery')}
+            />
+          </div>
 
           {/* Asymmetric Editorial Photo Grid */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">

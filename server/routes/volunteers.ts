@@ -2,8 +2,8 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { SERVER_CONFIG } from '../config.js';
 import { SheetsService } from '../google/sheets.js';
-import { requireRole, AuthenticatedRequest, AuditLogger } from '../middleware/auth.js';
-import type { VolunteerApplication, ApiResponse } from '../../src/types/index.js';
+import { requireAuth, requirePermission, AuthenticatedRequest, AuditLogger } from '../middleware/auth.js';
+import type { VolunteerApplication, ApiResponse, EventItem, Activity, User } from '../../src/types/index.js';
 
 export const volunteersRouter = Router();
 
@@ -70,10 +70,157 @@ volunteersRouter.post('/', async (req: AuthenticatedRequest, res) => {
   }
 });
 
-// Admin: List all applications
-volunteersRouter.get('/admin', requireRole('admin', 'superadmin'), async (req: AuthenticatedRequest, res) => {
+// Volunteer: Get current authenticated user's volunteer application status
+volunteersRouter.get('/my-status', requireAuth, async (req: AuthenticatedRequest, res) => {
   try {
-    const collegeId = req.user?.role === 'superadmin' ? undefined : (req.user?.collegeId || SERVER_CONFIG.defaultCollegeId);
+    const userEmail = req.user?.email.toLowerCase();
+    const collegeId = req.user?.collegeId || SERVER_CONFIG.defaultCollegeId;
+
+    const applications = await SheetsService.getRecords<VolunteerApplication>('Volunteers', collegeId);
+    const myApp = applications.find(
+      (v) => v.email.toLowerCase() === userEmail || (req.user?.rollNumber && v.rollNumber.toLowerCase() === req.user.rollNumber.toLowerCase())
+    );
+
+    return res.json({
+      success: true,
+      data: myApp || null,
+    } as ApiResponse<VolunteerApplication | null>);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Failed to retrieve application status';
+    return res.status(500).json({ success: false, error: msg } as ApiResponse);
+  }
+});
+
+// Volunteer: Update own volunteer profile information
+volunteersRouter.put('/my-profile', requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const userEmail = req.user?.email.toLowerCase();
+    const collegeId = req.user?.collegeId || SERVER_CONFIG.defaultCollegeId;
+
+    const applications = await SheetsService.getRecords<VolunteerApplication>('Volunteers', collegeId);
+    const myApp = applications.find(
+      (v) => v.email.toLowerCase() === userEmail || (req.user?.rollNumber && v.rollNumber.toLowerCase() === req.user.rollNumber.toLowerCase())
+    );
+
+    const allowedUpdates = {
+      phone: req.body.phone,
+      department: req.body.department,
+      academicYear: req.body.academicYear,
+      semester: req.body.semester,
+      bloodGroup: req.body.bloodGroup,
+      skills: req.body.skills,
+      motivation: req.body.motivation,
+      previousExperience: req.body.previousExperience,
+    };
+
+    let updatedApp: VolunteerApplication | null = null;
+    if (myApp) {
+      updatedApp = await SheetsService.updateRecord<VolunteerApplication>('Volunteers', myApp.id, allowedUpdates);
+    }
+
+    // Also update Users sheet profile if exists
+    if (req.user?.id) {
+      await SheetsService.updateRecord<User>('Users', req.user.id, {
+        phone: req.body.phone,
+        department: req.body.department,
+        academicYear: req.body.academicYear,
+      });
+    }
+
+    await AuditLogger.log(
+      req,
+      'VOLUNTEER_PROFILE_UPDATED',
+      'volunteers',
+      `Volunteer ${req.user?.name} updated profile details.`
+    );
+
+    return res.json({
+      success: true,
+      data: updatedApp,
+      message: 'Profile updated successfully.',
+    } as ApiResponse);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Failed to update volunteer profile';
+    return res.status(400).json({ success: false, error: msg } as ApiResponse);
+  }
+});
+
+// Volunteer: Get personal activity history, enrolled tasks, and available opportunities
+volunteersRouter.get('/my-activities', requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const collegeId = req.user?.collegeId || SERVER_CONFIG.defaultCollegeId;
+    const allEvents = await SheetsService.getRecords<EventItem>('Events', collegeId);
+    const allActivities = await SheetsService.getRecords<Activity>('Activities', collegeId);
+
+    // Compute volunteer statistics based on user's registered/attended events
+    const assignedIds = req.user?.assignedEventIds || [];
+    const enrolledEvents = allEvents.filter((e) => assignedIds.includes(e.id) || assignedIds.includes(e.slug));
+    const upcomingOpportunities = allEvents.filter((e) => e.status === 'upcoming');
+
+    return res.json({
+      success: true,
+      data: {
+        enrolledEvents,
+        upcomingOpportunities,
+        recentActivities: allActivities.slice(0, 5),
+        totalCompletedEvents: enrolledEvents.filter((e) => e.status === 'past').length,
+        estimatedServiceHours: enrolledEvents.filter((e) => e.status === 'past').length * 4 + 12, // Baseline active hours
+      },
+    } as ApiResponse);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Failed to fetch personal volunteer activities';
+    return res.status(500).json({ success: false, error: msg } as ApiResponse);
+  }
+});
+
+// Volunteer: Register for an upcoming event / community drive
+volunteersRouter.post('/register-event', requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { eventId } = req.body;
+    if (!eventId) {
+      return res.status(400).json({ success: false, error: 'Event ID is required' } as ApiResponse);
+    }
+
+    const collegeId = req.user?.collegeId || SERVER_CONFIG.defaultCollegeId;
+    const allEvents = await SheetsService.getRecords<EventItem>('Events', collegeId);
+    const targetEvent = allEvents.find((e) => e.id === eventId || e.slug === eventId);
+
+    if (!targetEvent) {
+      return res.status(404).json({ success: false, error: 'Event not found' } as ApiResponse);
+    }
+
+    // Add to user's assigned events
+    const user = req.user!;
+    const currentAssigned = user.assignedEventIds || [];
+    if (!currentAssigned.includes(targetEvent.id)) {
+      currentAssigned.push(targetEvent.id);
+      await SheetsService.updateRecord<User>('Users', user.id, {
+        assignedEventIds: currentAssigned,
+      });
+    }
+
+    await AuditLogger.log(
+      req,
+      'VOLUNTEER_EVENT_ENROLLED',
+      'events',
+      `Volunteer ${user.name} enrolled for event "${targetEvent.title}"`
+    );
+
+    return res.json({
+      success: true,
+      message: `Enrolled successfully for "${targetEvent.title}"!`,
+    } as ApiResponse);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Failed to enroll in event';
+    return res.status(400).json({ success: false, error: msg } as ApiResponse);
+  }
+});
+
+// Admin: List all applications (enforces 'volunteers.view' permission)
+volunteersRouter.get('/admin', requirePermission('volunteers.view'), async (req: AuthenticatedRequest, res) => {
+  try {
+    const isSuperTier = req.user?.role === 'superadmin' || req.user?.role === 'super_admin_1' || req.user?.role === 'super_admin_2';
+    const collegeId = isSuperTier ? undefined : (req.user?.collegeId || SERVER_CONFIG.defaultCollegeId);
     const { status, search, department, academicYear } = req.query;
 
     let applications = await SheetsService.getRecords<VolunteerApplication>('Volunteers', collegeId);
@@ -108,13 +255,13 @@ volunteersRouter.get('/admin', requireRole('admin', 'superadmin'), async (req: A
   }
 });
 
-// Admin: Update status (Approve / Reject)
-volunteersRouter.put('/admin/:id/status', requireRole('admin', 'superadmin'), async (req: AuthenticatedRequest, res) => {
+// Admin: Update status (Approve / Reject) (enforces 'volunteers.approve' permission)
+volunteersRouter.put('/admin/:id/status', requirePermission('volunteers.approve'), async (req: AuthenticatedRequest, res) => {
   try {
     const { id } = req.params;
     const { status, reviewNotes } = req.body;
 
-    if (!['pending', 'approved', 'rejected'].includes(status)) {
+    if (!['pending', 'approved', 'rejected', 'action_required'].includes(status)) {
       return res.status(400).json({ success: false, error: 'Invalid status' } as ApiResponse);
     }
 

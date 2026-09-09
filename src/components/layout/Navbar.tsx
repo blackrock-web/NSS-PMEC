@@ -406,7 +406,24 @@ export const Navbar: React.FC<NavbarProps> = ({
                     </div>
 
                     <div className="py-1">
-                      {isAdmin ? (
+                      {(user.role === 'super_admin_1' || user.role === 'superadmin') ? (
+                        <>
+                          <button
+                            onClick={() => handleNavClick('/directorate')}
+                            className="w-full px-3 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2"
+                          >
+                            <Shield size={14} className="text-[#C8102E]" />
+                            <span>Directorate Portal</span>
+                          </button>
+                          <button
+                            onClick={() => handleNavClick('/admin')}
+                            className="w-full px-3 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2"
+                          >
+                            <Shield size={14} className="text-amber-500" />
+                            <span>College Operations</span>
+                          </button>
+                        </>
+                      ) : (user.role === 'admin' || user.role === 'coordinator') ? (
                         <button
                           onClick={() => handleNavClick('/admin')}
                           className="w-full px-3 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2"
@@ -416,11 +433,11 @@ export const Navbar: React.FC<NavbarProps> = ({
                         </button>
                       ) : (
                         <button
-                          onClick={() => handleNavClick('/join-nss')}
+                          onClick={() => handleNavClick('/volunteer')}
                           className="w-full px-3 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2"
                         >
                           <UserIcon size={14} className="text-blue-500" />
-                          <span>Volunteer Application</span>
+                          <span>Volunteer Portal</span>
                         </button>
                       )}
 
@@ -561,7 +578,24 @@ export const Navbar: React.FC<NavbarProps> = ({
             <div className="pt-4 border-t border-slate-100 mt-4 space-y-2">
               {isAuthenticated && user ? (
                 <>
-                  {isAdmin ? (
+                  {(user.role === 'super_admin_1' || user.role === 'superadmin') ? (
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => handleNavClick('/directorate')}
+                        className="py-2.5 bg-[#0B1528] text-white text-xs font-bold uppercase tracking-wider rounded-md shadow-xs flex items-center justify-center gap-1.5"
+                      >
+                        <Shield size={14} className="text-[#C8102E]" />
+                        <span>Directorate</span>
+                      </button>
+                      <button
+                        onClick={() => handleNavClick('/admin')}
+                        className="py-2.5 bg-slate-800 text-white text-xs font-bold uppercase tracking-wider rounded-md shadow-xs flex items-center justify-center gap-1.5"
+                      >
+                        <Shield size={14} className="text-amber-400" />
+                        <span>College Admin</span>
+                      </button>
+                    </div>
+                  ) : (user.role === 'admin' || user.role === 'coordinator') ? (
                     <button
                       onClick={() => handleNavClick('/admin')}
                       className="w-full py-2.5 bg-[#0B1528] text-white text-xs font-bold uppercase tracking-wider rounded-md shadow-xs flex items-center justify-center gap-2"
@@ -569,7 +603,15 @@ export const Navbar: React.FC<NavbarProps> = ({
                       <Shield size={14} className="text-amber-400" />
                       <span>Admin Portal Dashboard</span>
                     </button>
-                  ) : null}
+                  ) : (
+                    <button
+                      onClick={() => handleNavClick('/volunteer')}
+                      className="w-full py-2.5 bg-[#0B1528] text-white text-xs font-bold uppercase tracking-wider rounded-md shadow-xs flex items-center justify-center gap-2"
+                    >
+                      <UserIcon size={14} className="text-blue-400" />
+                      <span>My Volunteer Portal</span>
+                    </button>
+                  )}
                   <button
                     onClick={async () => {
                       await logout();

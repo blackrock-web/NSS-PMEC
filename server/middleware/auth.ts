@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { SERVER_CONFIG } from '../config.js';
 import { SheetsService } from '../google/sheets.js';
-import type { User, Role, AuditLogEntry } from '../../src/types/index.js';
+import { type User, type Role, type AuditLogEntry, type Permission, ROLE_PERMISSIONS } from '../../src/types/index.js';
 
 export interface AuthenticatedRequest extends Request {
   user?: User;
@@ -99,6 +99,36 @@ export function requireRole(...allowedRoles: Role[]) {
       return res.status(403).json({
         success: false,
         error: `Access denied. Requires one of: ${allowedRoles.join(', ')}`,
+      });
+    }
+
+    next();
+  };
+}
+
+/**
+ * Enforce fine-grained permission-based access control.
+ * Checks both the role's canonical permission map and any user-specific assigned permissions.
+ */
+export function requirePermission(...requiredPermissions: Permission[]) {
+  return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        error: 'Authentication required. Please sign in.',
+      });
+    }
+
+    const userRole = req.user.role;
+    const rolePerms = ROLE_PERMISSIONS[userRole] || [];
+    const customPerms = req.user.permissions || [];
+    const allPerms = new Set<string>([...rolePerms, ...customPerms]);
+
+    const missingPerms = requiredPermissions.filter((perm) => !allPerms.has(perm));
+    if (missingPerms.length > 0) {
+      return res.status(403).json({
+        success: false,
+        error: `Access denied. Required permission(s) missing: ${missingPerms.join(', ')}`,
       });
     }
 

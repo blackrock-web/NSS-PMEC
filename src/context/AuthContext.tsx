@@ -36,7 +36,21 @@ interface AuthContextType {
     email: string;
     tempToken: string;
     totpCode: string;
-    masterAuthKey?: string;
+  }) => Promise<{ success: boolean; error?: string }>;
+  loginSuperAdmin2: (credentials: {
+    email: string;
+    password: string;
+  }) => Promise<{
+    success: boolean;
+    requiresAdmin2FA?: boolean;
+    pending2FA?: Pending2FAState;
+    message?: string;
+    error?: string;
+  }>;
+  verify2FASuperAdmin2: (data: {
+    email: string;
+    tempToken: string;
+    totpCode: string;
   }) => Promise<{ success: boolean; error?: string }>;
   register: (formData: {
     name: string;
@@ -141,7 +155,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     email: string;
     tempToken: string;
     totpCode: string;
-    masterAuthKey?: string;
   }) => {
     setIsLoading(true);
     const res = await api.auth.verify2FA(data);
@@ -160,6 +173,54 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return {
       success: false,
       error: res.error || 'Invalid TOTP code or verification failed.',
+    };
+  };
+
+  const loginSuperAdmin2 = async (credentials: { email: string; password: string }) => {
+    setIsLoading(true);
+    const res = await api.auth.superAdmin2Login(credentials);
+    setIsLoading(false);
+
+    if (res.requiresAdmin2FA && res.data?.tempToken && res.data?.email) {
+      return {
+        success: false,
+        requiresAdmin2FA: true,
+        pending2FA: {
+          email: res.data.email,
+          role: 'super_admin_2' as Role,
+          tempToken: res.data.tempToken,
+          isSuperAdmin2: true,
+          message: res.message,
+        },
+        message: res.message || 'Super Admin Level 2 authorization challenge issued.',
+      };
+    }
+
+    return {
+      success: false,
+      error: res.error || 'Access denied: Invalid Super Admin Level 2 credentials.',
+    };
+  };
+
+  const verify2FASuperAdmin2 = async (data: {
+    email: string;
+    tempToken: string;
+    totpCode: string;
+  }) => {
+    setIsLoading(true);
+    const res = await api.auth.superAdmin2Verify2FA(data);
+    setIsLoading(false);
+
+    if (res.success && res.data?.token && res.data?.user) {
+      setStoredToken(res.data.token);
+      setToken(res.data.token);
+      setUser(res.data.user);
+      return { success: true };
+    }
+
+    return {
+      success: false,
+      error: res.error || 'Invalid TOTP authenticator code. Security clearance failed.',
     };
   };
 
@@ -244,6 +305,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setCollegeId,
         login,
         verify2FA,
+        loginSuperAdmin2,
+        verify2FASuperAdmin2,
         register,
         logout,
         demoSwitch,

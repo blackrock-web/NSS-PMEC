@@ -1,7 +1,6 @@
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import { SERVER_CONFIG } from './server/config.js';
 import { authenticate } from './server/middleware/auth.js';
@@ -19,9 +18,6 @@ import { uploadsRouter } from './server/routes/uploads.js';
 import { auditRouter } from './server/routes/audit.js';
 import { searchRouter } from './server/routes/search.js';
 import { analyticsRouter } from './server/routes/analytics.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 async function startServer() {
   const app = express();
@@ -46,7 +42,7 @@ async function startServer() {
   });
 
   // Serve local uploads folder statically
-  const uploadsPath = path.join(__dirname, 'public', 'uploads');
+  const uploadsPath = path.join(process.cwd(), 'public', 'uploads');
   app.use('/uploads', express.static(uploadsPath));
 
   // Global Authentication Middleware (attaches user & tenant to req)

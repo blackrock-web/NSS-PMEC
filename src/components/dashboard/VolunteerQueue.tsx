@@ -222,6 +222,12 @@ export const VolunteerQueue: React.FC = () => {
                           Pending Review
                         </span>
                       )}
+                      {app.status === 'action_required' && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase text-blue-700 bg-blue-50 px-2 py-0.5 border border-blue-200">
+                          <AlertCircle size={10} />
+                          Action Required
+                        </span>
+                      )}
                       {app.status === 'rejected' && (
                         <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase text-red-700 bg-red-50 px-2 py-0.5 border border-red-200">
                           <XCircle size={10} />
@@ -377,6 +383,14 @@ export const VolunteerQueue: React.FC = () => {
                   className="px-3 py-1.5 bg-red-600 text-white text-xs font-bold uppercase tracking-wider hover:bg-red-700 disabled:opacity-50"
                 >
                   Reject
+                </button>
+                <button
+                  type="button"
+                  disabled={actionLoading}
+                  onClick={() => handleUpdateStatus('action_required')}
+                  className="px-3 py-1.5 bg-blue-700 text-white text-xs font-bold uppercase tracking-wider hover:bg-blue-800 disabled:opacity-50"
+                >
+                  Request Info
                 </button>
                 <button
                   type="button"

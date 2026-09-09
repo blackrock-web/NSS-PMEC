@@ -114,7 +114,6 @@ export const api = {
       email: string;
       tempToken: string;
       totpCode: string;
-      masterAuthKey?: string;
     }) =>
       request<{ token: string; user: User }>('/auth/verify-2fa', {
         method: 'POST',
@@ -128,10 +127,30 @@ export const api = {
         issuer: string;
         account: string;
         otpauthUrl: string;
-        demoBypassCodes: string[];
-        masterKeyHint: string;
       }>(`/auth/totp-setup${query}`);
     },
+
+    superAdmin2Login: (body: { email: string; password?: string }) =>
+      request<{
+        requiresAdmin2FA?: boolean;
+        tempToken?: string;
+        email?: string;
+        role?: Role;
+        isSuperAdmin2?: boolean;
+      }>('/auth/superadmin2/login', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+
+    superAdmin2Verify2FA: (body: {
+      email: string;
+      tempToken: string;
+      totpCode: string;
+    }) =>
+      request<{ token: string; user: User }>('/auth/superadmin2/verify-2fa', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
 
     register: (body: {
       name: string;
@@ -220,6 +239,7 @@ export const api = {
         method: 'DELETE',
       }),
     getAuditDiffs: () => request<AuditTrailDiff[]>('/tenant/audit-diffs'),
+    list: () => request<TenantConfig[]>('/tenant/admin/tenants'),
     listTenants: () => request<TenantConfig[]>('/tenant/admin/tenants'),
     listAll: () => request<TenantConfig[]>('/tenant/admin/tenants'),
     provisionTenant: (data: {
@@ -230,6 +250,20 @@ export const api = {
       programmeOfficerName: string;
       email: string;
       phone: string;
+    }) =>
+      request<TenantConfig>('/tenant/admin/tenants', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    provision: (data: {
+      id: string;
+      collegeName: string;
+      collegeFullName: string;
+      universityAffiliation: string;
+      programmeOfficerName: string;
+      email: string;
+      phone: string;
+      [key: string]: any;
     }) =>
       request<TenantConfig>('/tenant/admin/tenants', {
         method: 'POST',
@@ -378,6 +412,25 @@ export const api = {
       request<VolunteerApplication>('/volunteers', {
         method: 'POST',
         body: JSON.stringify(data),
+      }),
+    getMyStatus: () => request<VolunteerApplication | null>('/volunteers/my-status'),
+    updateMyProfile: (data: Partial<VolunteerFormData>) =>
+      request<VolunteerApplication>('/volunteers/my-profile', {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
+    getMyActivities: () =>
+      request<{
+        enrolledEvents: EventItem[];
+        upcomingOpportunities: EventItem[];
+        recentActivities: Activity[];
+        totalCompletedEvents: number;
+        estimatedServiceHours: number;
+      }>('/volunteers/my-activities'),
+    registerForEvent: (eventId: string) =>
+      request<{ success: boolean; message: string }>('/volunteers/register-event', {
+        method: 'POST',
+        body: JSON.stringify({ eventId }),
       }),
     listAdmin: (params?: { status?: string; department?: string; academicYear?: string; search?: string }) => {
       const query = new URLSearchParams(params as Record<string, string>).toString();

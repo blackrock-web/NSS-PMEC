@@ -1,14 +1,17 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { api } from '../lib/api';
 import { useAuth } from './AuthContext';
-import type { TenantConfig } from '../types';
+import type { TenantConfig, SiteCmsContent } from '../types';
 
 interface TenantContextType {
   config: TenantConfig;
+  cmsContent: SiteCmsContent | null;
   loading: boolean;
   error: string | null;
   refreshConfig: () => Promise<void>;
+  refreshCms: () => Promise<void>;
   updateConfig: (newConfig: Partial<TenantConfig>) => Promise<{ success: boolean; error?: string }>;
+  updateCms: (newCms: Partial<SiteCmsContent>) => Promise<{ success: boolean; error?: string }>;
 }
 
 const DEFAULT_FALLBACK_CONFIG: TenantConfig = {
@@ -67,6 +70,7 @@ const TenantContext = createContext<TenantContextType | undefined>(undefined);
 export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { collegeId } = useAuth();
   const [config, setConfig] = useState<TenantConfig>(DEFAULT_FALLBACK_CONFIG);
+  const [cmsContent, setCmsContent] = useState<SiteCmsContent | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -87,9 +91,21 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   }, [collegeId]);
 
+  const refreshCms = useCallback(async () => {
+    try {
+      const res = await api.tenant.getCms();
+      if (res.success && res.data) {
+        setCmsContent(res.data);
+      }
+    } catch (err: unknown) {
+      console.warn('Failed to load dynamic CMS content:', err);
+    }
+  }, []);
+
   useEffect(() => {
     refreshConfig();
-  }, [refreshConfig]);
+    refreshCms();
+  }, [refreshConfig, refreshCms]);
 
   const updateConfig = async (newConfig: Partial<TenantConfig>) => {
     const res = await api.tenant.updateConfig(newConfig);
@@ -100,14 +116,26 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return { success: false, error: res.error || 'Failed to update configuration' };
   };
 
+  const updateCms = async (newCms: Partial<SiteCmsContent>) => {
+    const res = await api.tenant.updateCms(newCms);
+    if (res.success && res.data) {
+      setCmsContent(res.data);
+      return { success: true };
+    }
+    return { success: false, error: res.error || 'Failed to update CMS content' };
+  };
+
   return (
     <TenantContext.Provider
       value={{
         config,
+        cmsContent,
         loading,
         error,
         refreshConfig,
+        refreshCms,
         updateConfig,
+        updateCms,
       }}
     >
       {children}

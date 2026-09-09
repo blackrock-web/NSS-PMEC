@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useTenant } from '../../context/TenantContext';
+import { LiveAnalyticsSummary } from './LiveAnalyticsSummary';
 import type { DashboardTab } from './DashboardLayout';
 import type { VolunteerApplication, EventItem, StorageQuota } from '../../types';
 
@@ -108,115 +109,8 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ onNavigateTab }) => {
         </div>
       </div>
 
-      {/* Metric Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card 1: Active Volunteers */}
-        <div className="bg-white border border-[#E5E7EB] p-5 shadow-xs flex flex-col justify-between">
-          <div className="flex items-start justify-between">
-            <div className="space-y-1">
-              <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                Approved Volunteers
-              </span>
-              <div className="text-2xl font-serif font-bold text-[#0B1528]">
-                {approvedVolunteers.length + 498}
-              </div>
-            </div>
-            <div className="p-2 bg-emerald-50 text-emerald-700">
-              <Users size={20} />
-            </div>
-          </div>
-          <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-xs">
-            <span className="text-amber-700 font-bold flex items-center gap-1">
-              <Clock size={12} />
-              <span>{pendingVolunteers.length} Pending applications</span>
-            </span>
-            <button
-              onClick={() => onNavigateTab('volunteers')}
-              className="text-[#0B1528] font-bold hover:underline"
-            >
-              Verify
-            </button>
-          </div>
-        </div>
-
-        {/* Card 2: Upcoming Events */}
-        <div className="bg-white border border-[#E5E7EB] p-5 shadow-xs flex flex-col justify-between">
-          <div className="flex items-start justify-between">
-            <div className="space-y-1">
-              <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                Upcoming Drives
-              </span>
-              <div className="text-2xl font-serif font-bold text-[#0B1528]">
-                {upcomingEvents.length}
-              </div>
-            </div>
-            <div className="p-2 bg-blue-50 text-blue-700">
-              <Calendar size={20} />
-            </div>
-          </div>
-          <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-xs">
-            <span className="text-gray-600">Next: Blood Donation Camp</span>
-            <button
-              onClick={() => onNavigateTab('events')}
-              className="text-[#0B1528] font-bold hover:underline"
-            >
-              Manage
-            </button>
-          </div>
-        </div>
-
-        {/* Card 3: Activities & Shramdaan */}
-        <div className="bg-white border border-[#E5E7EB] p-5 shadow-xs flex flex-col justify-between">
-          <div className="flex items-start justify-between">
-            <div className="space-y-1">
-              <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                Field Activities
-              </span>
-              <div className="text-2xl font-serif font-bold text-[#0B1528]">
-                26
-              </div>
-            </div>
-            <div className="p-2 bg-purple-50 text-purple-700">
-              <Sparkles size={20} />
-            </div>
-          </div>
-          <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-xs">
-            <span className="text-gray-600">1,200 saplings planted</span>
-            <button
-              onClick={() => onNavigateTab('activities')}
-              className="text-[#0B1528] font-bold hover:underline"
-            >
-              View
-            </button>
-          </div>
-        </div>
-
-        {/* Card 4: Reports Published */}
-        <div className="bg-white border border-[#E5E7EB] p-5 shadow-xs flex flex-col justify-between">
-          <div className="flex items-start justify-between">
-            <div className="space-y-1">
-              <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                Audited Reports
-              </span>
-              <div className="text-2xl font-serif font-bold text-[#0B1528]">
-                2 Active PDFs
-              </div>
-            </div>
-            <div className="p-2 bg-amber-50 text-amber-700">
-              <FileText size={20} />
-            </div>
-          </div>
-          <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-xs">
-            <span className="text-gray-600">Annual + Special Camp</span>
-            <button
-              onClick={() => onNavigateTab('reports')}
-              className="text-[#0B1528] font-bold hover:underline"
-            >
-              Repository
-            </button>
-          </div>
-        </div>
-      </div>
+      {/* Real-Time Live Database Telemetry Cards */}
+      <LiveAnalyticsSummary showVisualizations={false} onNavigateTab={onNavigateTab} />
 
       {/* Google Drive Storage Widget & Quick Actions */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

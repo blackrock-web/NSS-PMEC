@@ -18,7 +18,11 @@ import { TenantsManager } from '../components/dashboard/TenantsManager';
 import { Shield, Lock, ArrowRight, ShieldAlert, ArrowLeft } from 'lucide-react';
 import { useTenant } from '../context/TenantContext';
 
-export const AdminDashboard: React.FC = () => {
+interface AdminDashboardProps {
+  onNavigate?: (path: string) => void;
+}
+
+export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) => {
   const { user, isAuthenticated, isAdmin, openLogin, logout } = useAuth();
   const { config } = useTenant();
   const [activeTab, setActiveTab] = useState<DashboardTab>('overview');
@@ -27,8 +31,8 @@ export const AdminDashboard: React.FC = () => {
   if (!isAuthenticated || !user) {
     return (
       <div className="min-h-[80vh] flex items-center justify-center py-16 px-4 bg-[#F8FAFC]">
-        <div className="max-w-md w-full bg-white border border-slate-200 shadow-xl p-8 text-center rounded-lg">
-          <div className="w-16 h-16 bg-[#0B1528] text-white flex items-center justify-center mx-auto mb-5 rounded-full border-2 border-[#C8102E] shadow-sm">
+        <div className="max-w-md w-full bg-white border border-slate-200 shadow-xl p-8 text-center rounded-2xl">
+          <div className="w-16 h-16 bg-[#0B1528] text-white flex items-center justify-center mx-auto mb-5 rounded-2xl border-2 border-[#C8102E] shadow-sm">
             <Lock size={26} />
           </div>
 
@@ -36,15 +40,15 @@ export const AdminDashboard: React.FC = () => {
             Restricted Access
           </div>
           <h2 className="font-serif text-2xl font-bold text-[#0B1528] tracking-tight mb-2">
-            NSS Directorate Portal
+            NSS Unit Admin Portal
           </h2>
           <p className="text-xs text-slate-600 leading-relaxed mb-6">
-            Access to volunteer verification records, identity access management, and institutional analytics requires authenticated Programme Officer or Directorate credentials.
+            Volunteer queue approvals, attendance verification, and operations management require authorized Programme Officer or Cadre Coordinator clearance.
           </p>
 
           <button
             onClick={openLogin}
-            className="w-full inline-flex items-center justify-center gap-2 py-3 px-4 bg-[#0B1528] text-white text-xs font-bold tracking-wider uppercase hover:bg-[#1E3A8A] transition-colors rounded-md shadow-xs"
+            className="w-full inline-flex items-center justify-center gap-2 py-3 px-4 bg-[#0B1528] text-white text-xs font-bold tracking-wider uppercase hover:bg-[#1E3A8A] transition-colors rounded-xl shadow-xs"
           >
             <span>Sign In to Institutional Admin</span>
             <ArrowRight size={14} />
@@ -62,8 +66,8 @@ export const AdminDashboard: React.FC = () => {
   if (!isAdmin) {
     return (
       <div className="min-h-[80vh] flex items-center justify-center py-16 px-4 bg-[#F8FAFC]">
-        <div className="max-w-md w-full bg-white border border-amber-200 shadow-xl p-8 text-center rounded-lg space-y-4">
-          <div className="w-16 h-16 bg-amber-50 text-amber-600 flex items-center justify-center mx-auto rounded-full border border-amber-200 shadow-xs">
+        <div className="max-w-md w-full bg-white border border-amber-200 shadow-xl p-8 text-center rounded-2xl space-y-4">
+          <div className="w-16 h-16 bg-amber-50 text-amber-600 flex items-center justify-center mx-auto rounded-2xl border border-amber-200 shadow-xs">
             <ShieldAlert size={28} />
           </div>
 
@@ -75,26 +79,38 @@ export const AdminDashboard: React.FC = () => {
               Administrative Access Restricted
             </h2>
             <p className="text-xs text-slate-600 mt-2 leading-relaxed">
-              You are signed in as <strong>{user.name}</strong> with <span className="font-mono font-bold text-blue-600 uppercase">Member</span> permissions. Accessing the administration portal requires an authorized Programme Officer account and 2FA passcode verification.
+              You are signed in as <strong>{user.name}</strong> with <span className="font-mono font-bold text-blue-600 uppercase">Volunteer</span> permissions. The administrative console is restricted to Programme Officers and Coordinators.
             </p>
           </div>
 
           <div className="flex flex-col gap-2 pt-2">
             <button
-              onClick={openLogin}
-              className="w-full py-2.5 px-4 bg-[#0B1528] text-white text-xs font-bold uppercase tracking-wider rounded-md hover:bg-[#1E3A8A] transition-colors flex items-center justify-center gap-2"
+              onClick={() => {
+                if (onNavigate) {
+                  onNavigate('/volunteer');
+                } else {
+                  window.location.href = '#/volunteer';
+                }
+              }}
+              className="w-full py-2.5 px-4 bg-[#0B1528] text-white text-xs font-bold uppercase tracking-wider rounded-xl hover:bg-[#1E3A8A] transition-colors flex items-center justify-center gap-2"
             >
-              <Shield size={14} />
-              <span>Verify Official Admin Credentials</span>
+              <span>Go to My Volunteer Portal</span>
+              <ArrowRight size={14} />
             </button>
 
-            <a
-              href="/"
-              className="w-full py-2 px-4 border border-slate-300 text-slate-700 text-xs font-semibold rounded-md hover:bg-slate-50 transition-colors flex items-center justify-center gap-1.5"
+            <button
+              onClick={() => {
+                if (onNavigate) {
+                  onNavigate('/');
+                } else {
+                  window.location.href = '#/';
+                }
+              }}
+              className="w-full py-2 px-4 border border-slate-300 text-slate-700 text-xs font-semibold rounded-xl hover:bg-slate-50 transition-colors flex items-center justify-center gap-1.5"
             >
               <ArrowLeft size={13} />
-              <span>Return to Public Portal</span>
-            </a>
+              <span>Return to Public Website</span>
+            </button>
           </div>
         </div>
       </div>

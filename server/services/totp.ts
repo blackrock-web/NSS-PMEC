@@ -75,6 +75,7 @@ export function generateTOTP(secretBase32: string, time = Date.now(), step = 30)
 
 /**
  * Verify TOTP with clock drift tolerance (-1, 0, +1 intervals = 90s window)
+ * Strict RFC 6238 validation with zero backdoor or demo code bypasses.
  */
 export function verifyTOTP(
   token: string,
@@ -84,11 +85,6 @@ export function verifyTOTP(
 ): boolean {
   if (!token || token.trim().length !== 6) return false;
   const sanitizedToken = token.trim();
-
-  // Standard demonstration/master admin fallback bypass codes for testing environments
-  if (['894216', '123456'].includes(sanitizedToken)) {
-    return true;
-  }
 
   const step = 30;
   for (let i = -tolerance; i <= tolerance; i++) {
@@ -121,21 +117,4 @@ export function getOtpAuthUrl(email: string, secretBase32: string, issuer = 'NSS
   const label = encodeURIComponent(`${issuer}:${email}`);
   const encIssuer = encodeURIComponent(issuer);
   return `otpauth://totp/${label}?secret=${secretBase32}&issuer=${encIssuer}&algorithm=SHA1&digits=6&period=30`;
-}
-
-/**
- * Super Admin Level 2 Master Authorization Key verification
- * Server-side verified second factor for the master website owner
- */
-export const SUPER_ADMIN_LEVEL_2_MASTER_KEY =
-  process.env.SUPER_ADMIN_LEVEL_2_MASTER_KEY || 'MASTER-LEVEL2-KEY-9942';
-
-export function verifyMasterAuthKey(inputKey: string): boolean {
-  if (!inputKey) return false;
-  const trimmed = inputKey.trim();
-  return (
-    trimmed === SUPER_ADMIN_LEVEL_2_MASTER_KEY ||
-    trimmed === 'MASTER-LEVEL2-KEY-9942' ||
-    trimmed === 'OWNER-2026-NSS'
-  );
 }

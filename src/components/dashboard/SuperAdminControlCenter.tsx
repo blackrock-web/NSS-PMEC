@@ -22,6 +22,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useTenant } from '../../context/TenantContext';
 import { api } from '../../lib/api';
 import type { SiteCmsContent, ExternalDataSource, AuditTrailDiff } from '../../types';
 
@@ -31,6 +32,7 @@ interface SuperAdminControlCenterProps {
 
 export const SuperAdminControlCenter: React.FC<SuperAdminControlCenterProps> = ({ onBackToPortal }) => {
   const { user, isSuperAdmin2, logout } = useAuth();
+  const { refreshCms } = useTenant();
 
   const [activeSection, setActiveSection] = useState<'cms' | 'datasources' | 'audit' | 'security'>('cms');
   const [loading, setLoading] = useState<boolean>(true);
@@ -105,6 +107,7 @@ export const SuperAdminControlCenter: React.FC<SuperAdminControlCenterProps> = (
       const res = await api.tenant.updateCms(cmsContent);
       if (res.success && res.data) {
         setCmsContent(res.data);
+        refreshCms();
         setSaveSuccess('Website configuration updated dynamically! Changes are live across all public portals.');
         // Refresh audit diffs
         api.tenant.getAuditDiffs().then((d) => d.success && d.data && setAuditDiffs(d.data));

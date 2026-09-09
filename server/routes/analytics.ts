@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { SERVER_CONFIG } from '../config.js';
 import { SheetsService } from '../google/sheets.js';
-import { requireRole, AuthenticatedRequest } from '../middleware/auth.js';
+import { requireRole, requirePermission, AuthenticatedRequest } from '../middleware/auth.js';
 import type {
   VolunteerApplication,
   EventItem,
@@ -15,9 +15,9 @@ export const analyticsRouter = Router();
 /**
  * GET /api/analytics/summary
  * Live database telemetry for Volunteer Enrollment, Pending Approvals, and Event Metrics.
- * Accessible to Coordinators, Admins, and Super Admins.
+ * Accessible to any role with 'analytics.view' permission.
  */
-analyticsRouter.get('/summary', requireRole('coordinator', 'admin', 'super_admin_1', 'superadmin', 'super_admin_2'), async (req: AuthenticatedRequest, res) => {
+analyticsRouter.get('/summary', requirePermission('analytics.view'), async (req: AuthenticatedRequest, res) => {
   try {
     const isSuperAdmin = req.user?.role === 'superadmin' || req.user?.role === 'super_admin_1' || req.user?.role === 'super_admin_2';
     const collegeId = isSuperAdmin ? undefined : (req.user?.collegeId || SERVER_CONFIG.defaultCollegeId);

@@ -55,13 +55,9 @@ export const UnifiedAuthModal: React.FC<UnifiedAuthModalProps> = ({
   // Form Fields - 2FA Verification
   const [pending2FA, setPending2FA] = useState<Pending2FAState | null>(null);
   const [totpCode, setTotpCode] = useState('');
-  const [masterAuthKey, setMasterAuthKey] = useState('');
-  const [showMasterKey, setShowMasterKey] = useState(false);
   const [totpSetupInfo, setTotpSetupInfo] = useState<{
     secret: string;
-    otpauthUrl: string;
-    demoBypassCodes: string[];
-    masterKeyHint: string;
+    otpauthUrl?: string;
   } | null>(null);
 
   // Form Fields - Registration (Normal Volunteer Cadet)
@@ -104,7 +100,6 @@ export const UnifiedAuthModal: React.FC<UnifiedAuthModalProps> = ({
     setInfoMessage(null);
     setPending2FA(null);
     setTotpCode('');
-    setMasterAuthKey('');
     if (propsOnClose) {
       propsOnClose();
     } else {
@@ -115,9 +110,13 @@ export const UnifiedAuthModal: React.FC<UnifiedAuthModalProps> = ({
   const handleAuthComplete = (role?: Role) => {
     handleClose();
     if (onSuccess) onSuccess();
-    const isAdminRole = role && role !== 'user' && role !== 'member' && role !== 'public';
-    if (isAdminRole && onNavigateToAdmin) {
-      onNavigateToAdmin();
+    if (!role) return;
+    if (role === 'user' || role === 'member') {
+      window.location.hash = '#/volunteer';
+    } else if (role === 'coordinator' || role === 'admin') {
+      window.location.hash = '#/admin';
+    } else if (role === 'super_admin_1' || role === 'superadmin') {
+      window.location.hash = '#/directorate';
     }
   };
 
@@ -167,7 +166,6 @@ export const UnifiedAuthModal: React.FC<UnifiedAuthModalProps> = ({
       email: pending2FA.email,
       tempToken: pending2FA.tempToken,
       totpCode: totpCode.trim(),
-      masterAuthKey: masterAuthKey.trim() || undefined,
     });
 
     setLoading(false);
@@ -483,64 +481,15 @@ export const UnifiedAuthModal: React.FC<UnifiedAuthModalProps> = ({
                 </div>
               </div>
 
-              {/* Demo Evaluation Codes */}
+              {/* Authenticator App Setup Info */}
               {totpSetupInfo && (
                 <div className="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-700/60 text-xs">
                   <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-slate-500 font-medium">Evaluation Demo TOTP Codes:</span>
-                    <span className="text-[10px] font-mono text-slate-400">Secret: {totpSetupInfo.secret}</span>
+                    <span className="text-slate-600 dark:text-slate-300 font-medium">Authenticator Key (RFC 6238):</span>
+                    <span className="text-[11px] font-mono bg-slate-200/80 dark:bg-slate-700 px-2 py-0.5 rounded text-slate-800 dark:text-slate-200 font-semibold">{totpSetupInfo.secret}</span>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    {totpSetupInfo.demoBypassCodes.map((code) => (
-                      <button
-                        key={code}
-                        type="button"
-                        onClick={() => setTotpCode(code)}
-                        className="px-2.5 py-1 bg-white dark:bg-slate-700 hover:bg-blue-50 dark:hover:bg-slate-600 border border-slate-200 dark:border-slate-600 rounded text-xs font-mono font-bold text-blue-700 dark:text-blue-300 transition-colors"
-                      >
-                        {code}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Super Admin Level 2 Master Key Input */}
-              {pending2FA.isSuperAdmin2 && (
-                <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block text-xs font-semibold text-rose-700 dark:text-rose-400 uppercase tracking-wider">
-                      Master Authorization Key (Level 2 Required)
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => setShowMasterKey(!showMasterKey)}
-                      className="text-xs text-slate-400 hover:text-slate-600"
-                    >
-                      {showMasterKey ? 'Hide' : 'Show'}
-                    </button>
-                  </div>
-                  <div className="relative">
-                    <Shield className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-rose-500" />
-                    <input
-                      id="auth-master-key-input"
-                      type={showMasterKey ? 'text' : 'password'}
-                      required
-                      value={masterAuthKey}
-                      onChange={(e) => setMasterAuthKey(e.target.value)}
-                      placeholder="Enter Master Level 2 Auth Key"
-                      className="w-full pl-10 pr-4 py-2 bg-rose-50/50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900 rounded-xl text-sm font-mono text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-rose-500"
-                    />
-                  </div>
-                  <p className="text-[11px] text-slate-400 mt-1">
-                    Evaluation Key:{' '}
-                    <button
-                      type="button"
-                      onClick={() => setMasterAuthKey('MASTER-LEVEL2-KEY-9942')}
-                      className="text-rose-600 dark:text-rose-400 font-mono underline hover:no-underline"
-                    >
-                      MASTER-LEVEL2-KEY-9942
-                    </button>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Add this secret key to Google Authenticator, Microsoft Authenticator, or 2FAS, then enter your live 6-digit TOTP code.
                   </p>
                 </div>
               )}
@@ -851,25 +800,25 @@ export const UnifiedAuthModal: React.FC<UnifiedAuthModalProps> = ({
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center space-x-1">
               <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-              <span>Instant Evaluation Tiers (5 Roles)</span>
+              <span>Instant Evaluation Tiers (4 Roles)</span>
             </span>
             <span className="text-[10px] text-slate-400">Click to preview portal</span>
           </div>
-          <div className="grid grid-cols-5 gap-1.5 text-center">
+          <div className="grid grid-cols-4 gap-2 text-center">
             <button
               id="demo-switch-user"
               type="button"
               onClick={() => handleDemoSwitch('user')}
-              className="px-1.5 py-1.5 bg-white dark:bg-slate-700 hover:bg-blue-50 dark:hover:bg-slate-600 border border-slate-200 dark:border-slate-600 rounded-lg text-[10px] font-semibold text-slate-700 dark:text-slate-200 truncate"
+              className="px-2 py-1.5 bg-white dark:bg-slate-700 hover:bg-blue-50 dark:hover:bg-slate-600 border border-slate-200 dark:border-slate-600 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-200 truncate"
               title="Student Volunteer"
             >
-              User
+              Volunteer
             </button>
             <button
               id="demo-switch-coordinator"
               type="button"
               onClick={() => handleDemoSwitch('coordinator')}
-              className="px-1.5 py-1.5 bg-white dark:bg-slate-700 hover:bg-purple-50 dark:hover:bg-slate-600 border border-slate-200 dark:border-slate-600 rounded-lg text-[10px] font-semibold text-purple-700 dark:text-purple-300 truncate"
+              className="px-2 py-1.5 bg-white dark:bg-slate-700 hover:bg-purple-50 dark:hover:bg-slate-600 border border-slate-200 dark:border-slate-600 rounded-lg text-xs font-semibold text-purple-700 dark:text-purple-300 truncate"
               title="Cadre Coordinator"
             >
               Coordinator
@@ -878,28 +827,19 @@ export const UnifiedAuthModal: React.FC<UnifiedAuthModalProps> = ({
               id="demo-switch-admin"
               type="button"
               onClick={() => handleDemoSwitch('admin')}
-              className="px-1.5 py-1.5 bg-white dark:bg-slate-700 hover:bg-blue-50 dark:hover:bg-slate-600 border border-slate-200 dark:border-slate-600 rounded-lg text-[10px] font-semibold text-blue-700 dark:text-blue-300 truncate"
+              className="px-2 py-1.5 bg-white dark:bg-slate-700 hover:bg-blue-50 dark:hover:bg-slate-600 border border-slate-200 dark:border-slate-600 rounded-lg text-xs font-semibold text-blue-700 dark:text-blue-300 truncate"
               title="Programme Officer Admin"
             >
-              Admin
+              Admin 1
             </button>
             <button
               id="demo-switch-super1"
               type="button"
               onClick={() => handleDemoSwitch('super_admin_1')}
-              className="px-1.5 py-1.5 bg-white dark:bg-slate-700 hover:bg-indigo-50 dark:hover:bg-slate-600 border border-slate-200 dark:border-slate-600 rounded-lg text-[10px] font-semibold text-indigo-700 dark:text-indigo-300 truncate"
+              className="px-2 py-1.5 bg-white dark:bg-slate-700 hover:bg-indigo-50 dark:hover:bg-slate-600 border border-slate-200 dark:border-slate-600 rounded-lg text-xs font-semibold text-indigo-700 dark:text-indigo-300 truncate"
               title="Regional Directorate"
             >
-              Super 1
-            </button>
-            <button
-              id="demo-switch-super2"
-              type="button"
-              onClick={() => handleDemoSwitch('super_admin_2')}
-              className="px-1.5 py-1.5 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 border border-rose-200 dark:border-rose-800 rounded-lg text-[10px] font-semibold text-rose-700 dark:text-rose-300 truncate"
-              title="Web Master Control Center"
-            >
-              Super 2
+              Superadmin 1
             </button>
           </div>
         </div>

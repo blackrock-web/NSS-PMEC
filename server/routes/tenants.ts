@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { SERVER_CONFIG } from '../config.js';
 import { SheetsService, mockSiteCmsContent } from '../google/sheets.js';
 import { DriveService } from '../google/drive.js';
-import { requireRole, AuthenticatedRequest, AuditLogger } from '../middleware/auth.js';
+import { requireRole, requirePermission, AuthenticatedRequest, AuditLogger } from '../middleware/auth.js';
 import type {
   TenantConfig,
   SiteCmsContent,
@@ -39,7 +39,7 @@ tenantsRouter.get('/cms', async (req: AuthenticatedRequest, res) => {
  * Super Admin Level 2 Exclusive: Dynamically update website content, headers, announcements, mottos, and footer.
  * Strictly enforced on the server; creates granular audit diffs.
  */
-tenantsRouter.put('/cms', requireRole('super_admin_2'), async (req: AuthenticatedRequest, res) => {
+tenantsRouter.put('/cms', requirePermission('website.content.edit'), async (req: AuthenticatedRequest, res) => {
   try {
     const updates: Partial<SiteCmsContent> = req.body;
     const actorEmail = req.user?.email || 'owner@college.edu.in';
@@ -100,7 +100,7 @@ tenantsRouter.put('/cms', requireRole('super_admin_2'), async (req: Authenticate
 /**
  * GET /api/tenant/data-sources
  */
-tenantsRouter.get('/data-sources', requireRole('super_admin_2'), async (req: AuthenticatedRequest, res) => {
+tenantsRouter.get('/data-sources', requirePermission('website.integrations.manage'), async (req: AuthenticatedRequest, res) => {
   try {
     const sources = await SheetsService.getRecords<ExternalDataSource>('ExternalDataSources');
     return res.json({ success: true, data: sources } as ApiResponse<ExternalDataSource[]>);
@@ -113,7 +113,7 @@ tenantsRouter.get('/data-sources', requireRole('super_admin_2'), async (req: Aut
 /**
  * POST /api/tenant/data-sources
  */
-tenantsRouter.post('/data-sources', requireRole('super_admin_2'), async (req: AuthenticatedRequest, res) => {
+tenantsRouter.post('/data-sources', requirePermission('website.integrations.manage'), async (req: AuthenticatedRequest, res) => {
   try {
     const newSource: ExternalDataSource = {
       id: `src-${Date.now()}`,
@@ -140,7 +140,7 @@ tenantsRouter.post('/data-sources', requireRole('super_admin_2'), async (req: Au
 /**
  * PUT /api/tenant/data-sources/:id
  */
-tenantsRouter.put('/data-sources/:id', requireRole('super_admin_2'), async (req: AuthenticatedRequest, res) => {
+tenantsRouter.put('/data-sources/:id', requirePermission('website.integrations.manage'), async (req: AuthenticatedRequest, res) => {
   try {
     const { id } = req.params;
     const updated = await SheetsService.updateRecord<ExternalDataSource>('ExternalDataSources', id, req.body);
@@ -158,7 +158,7 @@ tenantsRouter.put('/data-sources/:id', requireRole('super_admin_2'), async (req:
 /**
  * DELETE /api/tenant/data-sources/:id
  */
-tenantsRouter.delete('/data-sources/:id', requireRole('super_admin_2'), async (req: AuthenticatedRequest, res) => {
+tenantsRouter.delete('/data-sources/:id', requirePermission('website.integrations.manage'), async (req: AuthenticatedRequest, res) => {
   try {
     const { id } = req.params;
     await SheetsService.deleteRecord('ExternalDataSources', id);
@@ -177,7 +177,7 @@ tenantsRouter.delete('/data-sources/:id', requireRole('super_admin_2'), async (r
 /**
  * GET /api/tenant/audit-diffs
  */
-tenantsRouter.get('/audit-diffs', requireRole('super_admin_2'), async (req: AuthenticatedRequest, res) => {
+tenantsRouter.get('/audit-diffs', requirePermission('system.activity.view'), async (req: AuthenticatedRequest, res) => {
   try {
     const diffs = await SheetsService.getRecords<AuditTrailDiff>('AuditTrailDiffs');
     return res.json({ success: true, data: diffs } as ApiResponse<AuditTrailDiff[]>);

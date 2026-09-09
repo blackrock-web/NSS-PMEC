@@ -308,6 +308,7 @@ export interface ImpactStatistic {
 
 export type ImpactStat = ImpactStatistic;
 
+export type TenantCollegeConfig = TenantConfig;
 export interface TenantConfig {
   id: string;
   collegeName: string;
@@ -359,7 +360,7 @@ export interface ApiResponse<T = unknown> {
   requiresAdmin2FA?: boolean;
 }
 
-export type ApplicationStatus = 'pending' | 'approved' | 'rejected';
+export type ApplicationStatus = 'pending' | 'approved' | 'rejected' | 'action_required';
 
 export interface VolunteerApplication extends VolunteerFormData {
   id: string;
@@ -471,28 +472,44 @@ export interface SiteCmsContent {
   collegeFullName: string;
   universityAffiliation: string;
   unitNumber: string;
+  unitDesignation?: string;
   motto: string;
+  mottoEnglish?: string;
   hindiMotto: string;
+  mottoHindi?: string;
   foundedYear: string;
 
   // Homepage Headings & Hero
   heroBadge: string;
   heroHeading: string;
+  heroHeadline?: string;
   heroSubheading: string;
+  heroSubtitle?: string;
   heroCtaPrimary: string;
+  heroCtaText?: string;
   heroCtaSecondary: string;
+  heroCtaLink?: string;
   aboutSectionTitle: string;
   aboutSectionDescription: string;
   missionStatement: string;
   visionStatement: string;
   orgDescription: string;
 
+  // Header Announcement Banner
+  announcementBannerActive?: boolean;
+  announcementText?: string;
+  announcementLink?: string;
+  announcementBadge?: string;
+
   // Contact Information
   collegeAddress: string;
+  address?: string;
   officialEmail: string;
   officialPhone: string;
   bloodHelpline: string;
+  emergencyBloodHelpline?: string;
   workingHours: string;
+  officeHours?: string;
 
   // Navigation Labels
   navLabels: {
@@ -508,6 +525,7 @@ export interface SiteCmsContent {
 
   // Footer & Legal Content
   footerDescription: string;
+  footerText?: string;
   copyrightText: string;
   termsText: string;
   privacyText: string;

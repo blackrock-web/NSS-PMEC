@@ -1,13 +1,21 @@
 import React from 'react';
-import { Mail, Phone, MapPin, ExternalLink, ArrowUpRight, Heart, ShieldCheck, Award } from 'lucide-react';
+import { Mail, Phone, MapPin, ExternalLink, ArrowUpRight, Heart, ShieldCheck, Award, Sparkles, Flag } from 'lucide-react';
 import { NssLogo } from '../common/NssLogo';
 import { SITE_CONFIG } from '../../data/config';
+import { useTenant } from '../../context/TenantContext';
 
 interface FooterProps {
   onNavigate: (path: string) => void;
 }
 
 export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
+  const { config, cmsContent } = useTenant();
+
+  const collegeFullName = cmsContent?.collegeFullName || config.collegeFullName || SITE_CONFIG.collegeFullName;
+  const unitNumber = cmsContent?.unitNumber || config.unitNumber || 'Unit 04 & 05';
+  const mottoEnglish = cmsContent?.motto || 'NOT ME, BUT YOU';
+  const mottoHindi = cmsContent?.hindiMotto || SITE_CONFIG.hindiMotto || 'न मे, अपितु भवते';
+
   const handleLinkClick = (e: React.MouseEvent, path: string) => {
     e.preventDefault();
     onNavigate(path);
@@ -16,31 +24,58 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
 
   return (
     <footer className="bg-[#0B1F3A] text-slate-300 border-t border-slate-800">
-      {/* Top Banner with Motto */}
-      <div className="border-b border-white/10 bg-[#071526]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-4 text-center md:text-left">
-            <NssLogo size={56} />
-            <div>
-              <div className="text-white font-extrabold text-xl tracking-tight">
-                NATIONAL SERVICE SCHEME
-              </div>
-              <div className="text-slate-400 text-sm">
-                Unit 04 & 05 • {SITE_CONFIG.collegeFullName}
-              </div>
-            </div>
-          </div>
+      {/* Top Banner with Motto - Upgraded Institutional Header */}
+      <div className="relative border-b border-white/10 bg-gradient-to-b from-[#061222] to-[#08172c] overflow-hidden">
+        {/* Subtle decorative top accent line */}
+        <div className="h-1 w-full bg-gradient-to-r from-[#C8102E] via-[#E63946] to-[#0B1528]" />
 
-          {/* Official Motto Banner */}
-          <div className="bg-white/5 border border-white/15 border-l-4 border-[#E63946] rounded-sm px-6 py-3 text-center md:text-right">
-            <div className="text-xs uppercase tracking-[0.25em] text-[#E63946] font-black">
-              National NSS Motto
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-7">
+          <div className="flex flex-col lg:flex-row items-center justify-between gap-6">
+            {/* Institutional Brand Identity */}
+            <div className="flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-4">
+              <div className="relative p-2.5 rounded-xl bg-white/5 border border-white/10 shadow-inner flex items-center justify-center shrink-0">
+                <NssLogo size={52} />
+              </div>
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                  <span className="text-white font-extrabold text-lg sm:text-xl tracking-tight font-serif">
+                    NATIONAL SERVICE SCHEME
+                  </span>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-white/10 text-slate-200 border border-white/15">
+                    {unitNumber}
+                  </span>
+                </div>
+                <p className="text-slate-300 text-xs sm:text-sm font-medium max-w-xl">
+                  {collegeFullName}
+                </p>
+                <div className="flex items-center justify-center sm:justify-start gap-3 pt-1 text-[11px] text-slate-400">
+                  <span className="flex items-center gap-1">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Govt. of India Scheme</span>
+                  </span>
+                  <span>•</span>
+                  <span>Youth & Community Outreach Cell</span>
+                </div>
+              </div>
             </div>
-            <div className="text-white font-black italic text-lg tracking-wide">
-              &quot;NOT ME, BUT YOU&quot;
-            </div>
-            <div className="text-xs text-slate-400">
-              {SITE_CONFIG.hindiMotto}
+
+            {/* Official National Motto Showcase Card */}
+            <div className="group relative bg-gradient-to-r from-white/[0.08] to-white/[0.03] hover:from-white/[0.12] hover:to-white/[0.05] border border-white/15 rounded-xl p-4 sm:px-6 sm:py-3.5 shadow-sm backdrop-blur-xs transition-all duration-300 text-center sm:text-right min-w-[280px]">
+              {/* Left Accent Stripe */}
+              <div className="absolute left-0 top-3 bottom-3 w-1 bg-[#C8102E] rounded-r-full hidden sm:block" />
+
+              <div className="space-y-1">
+                <div className="flex items-center justify-center sm:justify-end gap-1.5 text-[11px] uppercase tracking-[0.2em] text-[#E63946] font-bold">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>National NSS Motto</span>
+                </div>
+                <div className="text-white font-serif font-black italic text-lg sm:text-xl tracking-wide">
+                  &ldquo;{mottoEnglish}&rdquo;
+                </div>
+                <div className="text-xs sm:text-sm text-amber-200/90 font-medium tracking-wide">
+                  {mottoHindi}
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -175,17 +210,39 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
               </li>
               <li>
                 <a
+                  href="/volunteer"
+                  onClick={(e) => handleLinkClick(e, '/volunteer')}
+                  className="hover:text-white hover:translate-x-1 inline-block transition-transform"
+                >
+                  Volunteer Cadre Portal
+                </a>
+              </li>
+              <li>
+                <a
+                  href="/admin"
+                  onClick={(e) => handleLinkClick(e, '/admin')}
+                  className="hover:text-white hover:translate-x-1 inline-block transition-transform"
+                >
+                  Programme Officer Portal
+                </a>
+              </li>
+              <li>
+                <a
+                  href="/directorate"
+                  onClick={(e) => handleLinkClick(e, '/directorate')}
+                  className="hover:text-white hover:translate-x-1 inline-block transition-transform"
+                >
+                  Regional Directorate Portal
+                </a>
+              </li>
+              <li>
+                <a
                   href="/contact"
                   onClick={(e) => handleLinkClick(e, '/contact')}
                   className="hover:text-white hover:translate-x-1 inline-block transition-transform"
                 >
                   Contact NSS Office
                 </a>
-              </li>
-              <li>
-                <span className="text-xs text-slate-400 block pt-2 leading-relaxed">
-                  Open to all 1st & 2nd year undergraduate students across all academic departments.
-                </span>
               </li>
             </ul>
 

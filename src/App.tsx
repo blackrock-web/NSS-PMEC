@@ -21,18 +21,50 @@ import { ContactPage } from './pages/ContactPage';
 import { TeamPage } from './pages/TeamPage';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { AuthPage } from './pages/AuthPage';
+import { VolunteerPortal } from './pages/VolunteerPortal';
+import { DirectoratePortal } from './pages/DirectoratePortal';
+import { SecureAccessPortal } from './pages/SecureAccessPortal';
 
 import { ArrowUp } from 'lucide-react';
 import { SITE_CONFIG } from './data/config';
 
 function AppContent() {
-  const [currentPath, setCurrentPath] = useState<string>('/');
+  const getInitialPath = () => {
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash.replace(/^#/, '');
+      if (hash) return hash;
+      const pathname = window.location.pathname;
+      if (pathname && pathname !== '/') return pathname;
+    }
+    return '/';
+  };
+
+  const [currentPath, setCurrentPath] = useState<string>(getInitialPath);
   const [currentEventSlug, setCurrentEventSlug] = useState<string | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
   const [showScrollTop, setShowScrollTop] = useState<boolean>(false);
   const { config } = useTenant();
 
   const activeConfig = config || SITE_CONFIG;
+
+  // Sync route on hash change (e.g. browser back/forward or manual hash updates)
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.replace(/^#/, '');
+      if (hash) {
+        if (hash.startsWith('/events/')) {
+          setCurrentEventSlug(hash.replace('/events/', ''));
+          setCurrentPath('/events/[slug]');
+        } else {
+          setCurrentEventSlug(null);
+          setCurrentPath(hash);
+        }
+      }
+    };
+
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
 
   // Monitor scroll for back to top button
   useEffect(() => {
@@ -49,9 +81,11 @@ function AppContent() {
       const slug = path.replace('/events/', '');
       setCurrentEventSlug(slug);
       setCurrentPath('/events/[slug]');
+      window.location.hash = path;
     } else {
       setCurrentEventSlug(null);
       setCurrentPath(path);
+      window.location.hash = path;
     }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -114,12 +148,24 @@ function AppContent() {
         return <ContactPage />;
       case '/auth':
         return <AuthPage onNavigate={handleNavigate} />;
+      case '/volunteer':
+        return <VolunteerPortal onNavigate={handleNavigate} />;
       case '/admin':
-        return <AdminDashboard />;
+        return <AdminDashboard onNavigate={handleNavigate} />;
+      case '/directorate':
+      case '/superadmin':
+        return <DirectoratePortal onNavigate={handleNavigate} />;
+      case '/system/secure-access':
+        return <SecureAccessPortal onNavigate={handleNavigate} />;
       default:
         return <HomePage onNavigate={handleNavigate} onViewEvent={handleViewEvent} />;
     }
   };
+
+  // If user visits the isolated Super Admin Level 2 terminal, render in dedicated air-gapped frame
+  if (currentPath === '/system/secure-access') {
+    return <SecureAccessPortal onNavigate={handleNavigate} />;
+  }
 
   return (
     <div className="flex flex-col min-h-screen bg-[#F7F8FA] text-slate-900 selection:bg-[#E63946] selection:text-white font-sans antialiased">
@@ -146,7 +192,11 @@ function AppContent() {
       />
 
       {/* Authentication Modal */}
-      <LoginModal onLoginSuccess={() => handleNavigate('/admin')} />
+      <LoginModal
+        onLoginSuccess={() => {
+          // Redirect handled role-aware in modal
+        }}
+      />
 
       {/* Floating Back to Top Button */}
       {showScrollTop && (

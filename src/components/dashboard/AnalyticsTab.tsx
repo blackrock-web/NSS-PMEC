@@ -16,6 +16,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { useTenant } from '../../context/TenantContext';
+import { LiveAnalyticsSummary } from './LiveAnalyticsSummary';
 
 export const AnalyticsTab: React.FC = () => {
   const { config } = useTenant();
@@ -99,6 +100,9 @@ export const AnalyticsTab: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Real-time Live Database Telemetry & Interactive Visualizations */}
+      <LiveAnalyticsSummary showVisualizations={true} />
 
       {/* Primary KPI Metrics */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
